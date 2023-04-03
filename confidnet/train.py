@@ -9,7 +9,8 @@ from confidnet.loaders import get_loader
 from confidnet.learners import get_learner
 from confidnet.utils.logger import get_logger
 from confidnet.utils.misc import load_yaml
-from confidnet.utils.tensorboard_logger import TensorboardLogger
+# from confidnet.utils.tensorboard_logger import TensorboardLogger
+from torch.utils.tensorboard import SummaryWriter
 
 LOGGER = get_logger(__name__, level="DEBUG")
 
@@ -20,6 +21,7 @@ def main():
     parser.add_argument(
         "--no_cuda", action="store_true", default=False, help="disables CUDA training"
     )
+    parser.add_argument("--compile", action="store_true", default=False)
     parser.add_argument(
         "--from_scratch",
         "-f",
@@ -34,28 +36,28 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
 
     # Start from scatch or resume existing model and optim
-    if config_args["training"]["output_folder"].exists():
+    if (config_args["training"]["output_folder"] / "ckpts").exists():
         list_previous_ckpt = sorted(
-            [f for f in os.listdir(config_args["training"]["output_folder"]) if "model_epoch" in f]
+            [f for f in os.listdir(config_args["training"]["output_folder"] / "ckpts") if "model_epoch" in f]
         )
         if args.from_scratch or not list_previous_ckpt:
             LOGGER.info("Starting from scratch")
-            if click.confirm(
-                "Removing current training directory ? ({}).".format(
-                    config_args["training"]["output_folder"]
-                ),
-                abort=True,
-            ):
-                rmtree(config_args["training"]["output_folder"])
-            os.mkdir(config_args["training"]["output_folder"])
+            # if click.confirm(
+            #     "Removing current training directory ? ({}).".format(
+            #         config_args["training"]["output_folder"]
+            #     ),
+            #     default=False,
+            # ):
+            #     rmtree(config_args["training"]["output_folder"])
+            # os.makedirs(config_args["training"]["output_folder"], exist_ok=True)
             start_epoch = 1
         else:
             last_ckpt = list_previous_ckpt[-1]
-            checkpoint = torch.load(config_args["training"]["output_folder"] / str(last_ckpt))
+            checkpoint = torch.load(config_args["training"]["output_folder"] / "ckpts" / str(last_ckpt))
             start_epoch = checkpoint["epoch"] + 1
     else:
         LOGGER.info("Starting from scratch")
-        os.mkdir(config_args["training"]["output_folder"])
+        os.makedirs(config_args["training"]["output_folder"] / "ckpts")
         start_epoch = 1
 
     # Load dataset
@@ -103,7 +105,8 @@ def main():
     learner.model.print_summary(
         input_size=tuple([shape_i for shape_i in learner.train_loader.dataset[0][0].shape])
     )
-    learner.tb_logger = TensorboardLogger(config_args["training"]["output_folder"])
+    # learner.tb_logger = TensorboardLogger(config_args["training"]["output_folder"])
+    learner.tb_logger = SummaryWriter(config_args["training"]["output_folder"])
     copyfile(
         args.config_path, config_args["training"]["output_folder"] / f"config_{start_epoch}.yaml"
     )
@@ -123,12 +126,18 @@ def main():
         LOGGER.info(f"Parallelizing data to {nb_gpus} GPUs")
         learner.model = torch.nn.DataParallel(learner.model, device_ids=range(nb_gpus))
 
+    if args.compile:
+        LOGGER.info(f"Compiling model ...")
+        learner.model = torch.compile(learner.model)
     # Set scheduler
     learner.set_scheduler()
 
     # Start training
     for epoch in range(start_epoch, config_args["training"]["nb_epochs"] + 1):
-        learner.train(epoch)
+        if epoch % config_args["training"].get("eval_every", 1) == 0 or (epoch > config_args["training"]["nb_epochs"] - config_args["training"].get("eval_every", 1)):
+            learner.train(epoch,eval=True)
+        else:
+            learner.train(epoch,eval=False)
 
 
 if __name__ == "__main__":

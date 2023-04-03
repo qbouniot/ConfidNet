@@ -33,9 +33,6 @@ training:
 # Model parameters
 model:
     name: mlp
-    resume:
+    resume: 
     hidden_size: 1000
     is_dropout: True
-
-
-

@@ -1,0 +1,46 @@
+# Data parameters
+data:
+    dataset: cifar10
+    data_dir: data/cifar10-data
+    input_size: [32,32]
+    input_channels: 3
+    num_classes: 10
+    valid_size: 0.1
+
+# Training parameters
+training:
+    output_folder: exps/cifar10/vgg16-mixup_augm-confidnet_500ep/
+    task: classification
+    learner: selfconfid
+    mixup_pred: False
+    mixup_augm: False
+    nb_epochs: 500
+    eval_every: 20
+    batch_size: 128
+    loss:
+        name: selfconfid_mse
+        weighting: 1
+    optimizer:
+        name: adam
+        lr: 0.0001
+        # momentum: 0.9
+        # weight_decay: 0.0001
+    lr_schedule:
+    ft_on_val: False
+    smoother: 0.1
+    metrics: ['accuracy', 'auc', 'ap_success', 'ap_errors']
+    pin_memory: True
+    num_workers: 2
+    augmentations:
+        hflip: True
+        # rotate: 15
+        random_crop: 32
+        normalize: [[0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010]]
+
+# Model parameters
+model:
+    name: vgg16_selfconfid_classic
+    resume: exps/cifar10/vgg16-mixup_augm/ckpts/model_epoch_300.ckpt
+    uncertainty:
+    hidden_size: 1000
+    is_dropout: True

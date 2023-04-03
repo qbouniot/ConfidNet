@@ -21,6 +21,16 @@ class AbstractLeaner:
         self.nb_epochs = config_args["training"]["nb_epochs"]
         self.output_folder = config_args["training"]["output_folder"]
         self.lr_schedule = config_args["training"]["lr_schedule"]
+        
+        ####
+        self.mixup_pred = config_args["training"].get("mixup_pred", False)
+        if self.mixup_pred:
+            LOGGER.info(f"Using mixup predictions")
+        self.mixup_augm = config_args["training"].get("mixup_augm", False)
+        if self.mixup_augm:
+            LOGGER.info(f"Using mixup augmentation")
+        ####
+
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.test_loader = test_loader
@@ -66,7 +76,7 @@ class AbstractLeaner:
         # Temperature scaling
         self.temperature = config_args["training"].get("temperature", None)
 
-    def train(self, epoch):
+    def train(self, epoch, eval=True):
         pass
 
     def set_loss(self):
@@ -109,7 +119,7 @@ class AbstractLeaner:
                 else self.model.state_dict(),
                 "optimizer_state_dict": self.optimizer.state_dict(),
             },
-            self.output_folder / f"model_epoch_{epoch:03d}.ckpt",
+            self.output_folder / "ckpts" / f"model_epoch_{epoch:03d}.ckpt",
         )
 
     def save_tb(self, logs_dict):
@@ -122,11 +132,14 @@ class AbstractLeaner:
         del logs_dict["epoch"]
 
         for tag in logs_dict:
-            self.tb_logger.scalar_summary(tag, logs_dict[tag]["value"], epoch)
+            # self.tb_logger.scalar_summary(tag, logs_dict[tag]["value"], epoch)
+            self.tb_logger.add_scalar(tag, logs_dict[tag]["value"], epoch)
 
         # 2. Log values and gradients of the parameters (histogram summary)
         for tag, value in self.model.named_parameters():
             tag = tag.replace(".", "/")
-            self.tb_logger.histo_summary(tag, value.data.cpu().numpy(), epoch)
+            # self.tb_logger.histo_summary(tag, value.data.cpu().numpy(), epoch)
+            self.tb_logger.add_histogram(tag, value.data.cpu().numpy(), epoch)
             if not value.grad is None:
-                self.tb_logger.histo_summary(tag + "/grad", value.grad.data.cpu().numpy(), epoch)
+                # self.tb_logger.histo_summary(tag + "/grad", value.grad.data.cpu().numpy(), epoch)
+                self.tb_logger.add_histogram(tag + "/grad", value.grad.data.cpu().numpy(), epoch)

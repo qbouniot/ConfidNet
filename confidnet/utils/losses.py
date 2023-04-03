@@ -5,6 +5,8 @@ import torch.nn.functional as F
 
 from confidnet.utils import misc
 
+import numpy as np
+
 
 class SelfConfidMSELoss(nn.modules.loss._Loss):
     def __init__(self, config_args, device):
@@ -173,3 +175,47 @@ CUSTOM_LOSS = {
     "ranking": StructuredMAPRankingLoss,
     "ood_confidence": OODConfidenceLoss,
 }
+
+def mixup_data(x, y, alpha=1.0):
+    '''Returns mixed inputs, pairs of targets, and lambda'''
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1
+
+    batch_size = x.size()[0]
+    index = torch.randperm(batch_size, device=x.device)
+
+    mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+
+def mixup_criterion(criterion, pred, y_a, y_b, lam):
+    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
+
+def pgd_linf(model, X, y, epsilon=0.1, alpha=0.01, num_iter=20, randomize=False):
+    """Construct an adversarial perturbation for a given batch of images X using ground truth y and a given model with a L_inf-PGD attack.
+    Args:
+        model (nn.Module): model to attack
+        X (Tensor): batch of images
+        y (Tensor): ground truth
+        epsilon (float, optional): perturbation size. Defaults to 0.1.
+        alpha (float, optional): step size. Defaults to 0.01.
+        num_iter (int, optional): number of iterations. Defaults to 20.
+        randomize (bool, optional): random start for the perturbation. Defaults to False.
+    Returns:
+        Tensor: perturbation to apply to the batch of images
+    """
+    if randomize:
+        delta = torch.rand_like(X, requires_grad=True)
+        delta.data = delta.data * 2 * epsilon - epsilon
+    else:
+        delta = torch.zeros_like(X, requires_grad=True)
+        
+    for t in range(num_iter):
+        loss = nn.CrossEntropyLoss()(model(X + delta), y)
+        loss.backward()
+        delta.data = (delta + alpha*delta.grad.detach().sign()).clamp(-epsilon,epsilon)
+        delta.grad.zero_()
+    return delta.detach()

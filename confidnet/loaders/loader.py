@@ -19,7 +19,7 @@ class AbstractDataLoader:
                          config_args['data']['input_channels'])
         self.augmentations = config_args['training'].get('augmentations', None)
         self.ft_on_val = config_args['training'].get('ft_on_val', None)
-        self.resume_folder = config_args['model']['resume'].parent if isinstance(config_args['model']['resume'], Path) else None
+        self.resume_folder = config_args['model']['resume'].parent.parent if isinstance(config_args['model']['resume'], Path) else None
         self.valid_size = config_args['data']['valid_size']
         self.perturbed_folder = config_args['data'].get('perturbed_images', None)
         self.pin_memory = config_args['training']['pin_memory']
@@ -79,6 +79,7 @@ class AbstractDataLoader:
                 shuffle=True,
                 pin_memory=self.pin_memory,
                 num_workers=self.num_workers,
+                drop_last=True,
             )
         else:
             num_train = len(self.train_dataset)
@@ -114,6 +115,7 @@ class AbstractDataLoader:
                 sampler=train_sampler,
                 pin_memory=self.pin_memory,
                 num_workers=self.num_workers,
+                drop_last=True
             )
             self.val_loader = torch.utils.data.DataLoader(
                 dataset=self.train_dataset,

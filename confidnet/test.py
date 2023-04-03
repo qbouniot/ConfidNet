@@ -39,6 +39,8 @@ def main():
     )
     args = parser.parse_args()
 
+    LOGGER.info(f"Args used: {args}")
+
     config_args = load_yaml(args.config_path)
 
     # Overwrite for release
@@ -76,7 +78,7 @@ def main():
     )
 
     # Initialize and load model
-    ckpt_path = config_args["training"]["output_folder"] / f"model_epoch_{args.epoch:03d}.ckpt"
+    ckpt_path = config_args["training"]["output_folder"] / "ckpts" / f"model_epoch_{args.epoch:03d}.ckpt"
     checkpoint = torch.load(ckpt_path)
     learner.model.load_state_dict(checkpoint["model_state_dict"])
 

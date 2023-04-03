@@ -1,0 +1,1 @@
++ srun --kill-on-bad-exit=1 --output=exps/cifar10/vgg16-confidnet_mixup_augm_500ep/testing_confidnet_500.out python ./confidnet/test.py -c exps/cifar10/vgg16-confidnet_mixup_augm_500ep/config_1.yaml -e 500 -m confidnet
