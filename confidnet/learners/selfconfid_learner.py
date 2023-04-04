@@ -9,7 +9,7 @@ from confidnet.learners.learner import AbstractLeaner
 from confidnet.utils import misc
 from confidnet.utils.logger import get_logger
 from confidnet.utils.metrics import Metrics
-from confidnet.utils.losses import mixup_data,mixup_criterion
+from confidnet.utils.losses import mixup_data,mixup_criterion,pgd_linf
 
 LOGGER = get_logger(__name__, level="DEBUG")
 
@@ -39,6 +39,9 @@ class SelfConfidLearner(AbstractLeaner):
                 data, target = data.to(self.device), target.to(self.device)
                 if self.mixup_augm:
                     data, target_a, target_b, lam = mixup_data(data,target)
+                elif self.adv_augm:
+                    delta = pgd_linf(self.model, data, target, epsilon=self.adv_eps, num_iter=self.adv_iter, randomize=True)
+                    data = data + delta
                 self.optimizer.zero_grad()
                 output = self.model(data)
 

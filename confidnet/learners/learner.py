@@ -29,6 +29,12 @@ class AbstractLeaner:
         self.mixup_augm = config_args["training"].get("mixup_augm", False)
         if self.mixup_augm:
             LOGGER.info(f"Using mixup augmentation")
+        self.adv_augm = config_args["training"].get("adv_augm", False)
+        if self.adv_augm:
+            LOGGER.info(f"Using adv augmentation")
+            self.adv_iter = config_args["training"]["adv"].get("num_iter", 0)
+            self.adv_eps = config_args["training"]["adv"].get("eps", 1.) / 255 
+            LOGGER.info(f"{self.adv_iter} iterations of adv augm with eps = {self.adv_eps}")
         ####
 
         self.train_loader = train_loader
