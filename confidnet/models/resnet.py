@@ -95,11 +95,13 @@ class Bottleneck(nn.Module):
 
 class ResNet(AbstractModel):
 
-    def __init__(self, config_args, device, block_name='BasicBlock'):
+    def __init__(self, config_args, device):
         super(ResNet, self).__init__(config_args,device)
         depth = config_args["model"]["depth"] 
         num_classes = config_args["data"]["num_classes"]
         in_channels = config_args["data"]["input_channels"] 
+        block_name = config_args["model"].get("block_name", 'BasicBlock')
+
         # Model type specifies number of layers for CIFAR-10 model
         if block_name.lower() == 'basicblock':
             assert (depth - 2) % 6 == 0, 'When use basicblock, depth should be 6n+2, e.g. 20, 32, 44, 56, 110, 1202'
