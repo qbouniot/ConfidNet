@@ -5,6 +5,9 @@ from shutil import copyfile, rmtree
 import click
 import torch
 
+import numpy as np
+import random
+
 from confidnet.loaders import get_loader
 from confidnet.learners import get_learner
 from confidnet.utils.logger import get_logger
@@ -29,11 +32,21 @@ def main():
         default=False,
         help="Force training from scratch",
     )
+    parser.add_argument('--seed', default=42)
     args = parser.parse_args()
 
     config_args = load_yaml(args.config_path)
     # Device configuration
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+
+    # fix the seed for reproducibility
+    seed = args.seed 
+    # for multi-gpu -> + utils.get_rank()
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    LOGGER.info(f"Random seed used: {seed}")
+
 
     # Start from scatch or resume existing model and optim
     if (config_args["training"]["output_folder"] / "ckpts").exists():

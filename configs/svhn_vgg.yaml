@@ -1,0 +1,46 @@
+# Data parameters
+data:
+    dataset: svhn
+    data_dir: data/svhn-data
+    input_size: [32,32]
+    input_channels: 3
+    num_classes: 10
+    valid_size: 0.1
+
+# Training parameters
+training:
+    output_folder: exps/svhn/vgg16-mixup_augm
+    task: classification
+    learner: default
+    mixup_pred: False
+    mixup_augm: True
+    adv_augm: False
+    # adv:
+    #     num_iter: 5
+    #     eps: 8.
+    nb_epochs: 300
+    eval_every: 10
+    batch_size: 128
+    loss:
+        name: cross_entropy
+    optimizer:
+        name: sgd
+        lr: 0.1
+        momentum: 0.9
+        weight_decay: 0.0001
+    lr_schedule:
+        name: multi_step
+        milestones: [150, 250]
+    metrics: ['accuracy', 'auc', 'ap_success', 'ap_errors']
+    pin_memory: True
+    num_workers: 2
+    augmentations:
+        hflip: True
+        # rotate: 15
+        random_crop: 32
+        normalize: [[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]]
+
+# Model parameters
+model:
+    name: vgg16
+    resume: 
