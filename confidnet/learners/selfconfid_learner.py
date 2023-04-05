@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from confidnet.learners.learner import AbstractLeaner
+from confidnet.learners.learner import AbstractLearner
 from confidnet.utils import misc
 from confidnet.utils.logger import get_logger
 from confidnet.utils.metrics import Metrics
@@ -14,7 +14,7 @@ from confidnet.utils.losses import mixup_data,mixup_criterion,pgd_linf
 LOGGER = get_logger(__name__, level="DEBUG")
 
 
-class SelfConfidLearner(AbstractLeaner):
+class SelfConfidLearner(AbstractLearner):
     def __init__(self, config_args, train_loader, val_loader, test_loader, start_epoch, device):
         super().__init__(config_args, train_loader, val_loader, test_loader, start_epoch, device)
         self.freeze_layers()

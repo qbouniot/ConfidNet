@@ -11,7 +11,7 @@ from confidnet.utils.schedulers import get_scheduler
 LOGGER = get_logger(__name__, level="DEBUG")
 
 
-class AbstractLeaner:
+class AbstractLearner:
     def __init__(self, config_args, train_loader, val_loader, test_loader, start_epoch, device):
         self.config_args = config_args
         self.num_classes = config_args['data']['num_classes']

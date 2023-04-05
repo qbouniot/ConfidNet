@@ -33,6 +33,8 @@ class AbstractDataLoader:
             LOGGER.info("--- Augmentations ---")
             self.add_augmentations()
 
+        # CRL loaders
+        self.return_index = config_args['training']['learner'] == 'crl'
         # Load dataset
         self.train_dataset, self.val_dataset, self.test_dataset = None, None, None
         self.load_dataset()

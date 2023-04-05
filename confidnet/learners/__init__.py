@@ -1,7 +1,7 @@
 from confidnet.learners.default_learner import DefaultLearner
 from confidnet.learners.oodconfid_learner import OODConfidLearner
 from confidnet.learners.selfconfid_learner import SelfConfidLearner
-
+from confidnet.learners.crl_learner import CRLLearner
 
 def get_learner(config_args, train_loader, val_loader, test_loader, start_epoch, device):
     """
@@ -13,6 +13,7 @@ def get_learner(config_args, train_loader, val_loader, test_loader, start_epoch,
         "default": DefaultLearner,
         "selfconfid": SelfConfidLearner,
         "oodconfid": OODConfidLearner,
+        "crl": CRLLearner,
     }
 
     return learners_factory[config_args["training"]["learner"]](

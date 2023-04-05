@@ -5,45 +5,79 @@ from confidnet.augmentations import get_composed_augmentations
 from confidnet.loaders.camvid_dataset import CamvidDataset
 from confidnet.loaders.loader import AbstractDataLoader
 
+from confidnet.loaders.custom_datasets import MNIST_idx, SVHN_idx, CIFAR10_idx, CIFAR100_idx
+
 
 class MNISTLoader(AbstractDataLoader):
     def load_dataset(self):
-        self.train_dataset = datasets.MNIST(
-            root=self.data_dir, train=True, download=True, transform=self.augmentations_train
-        )
-        self.test_dataset = datasets.MNIST(
-            root=self.data_dir, train=False, download=True, transform=self.augmentations_test
-        )
+        if self.return_index:
+            self.train_dataset = MNIST_idx(
+                root=self.data_dir, train=True, download=True, transform=self.augmentations_train
+            )
+            self.test_dataset = MNIST_idx(
+                root=self.data_dir, train=False, download=True, transform=self.augmentations_test
+            )
+        else:
+            self.train_dataset = datasets.MNIST(
+                root=self.data_dir, train=True, download=True, transform=self.augmentations_train
+            )
+            self.test_dataset = datasets.MNIST(
+                root=self.data_dir, train=False, download=True, transform=self.augmentations_test
+            )
 
 
 class SVHNLoader(AbstractDataLoader):
     def load_dataset(self):
-        self.train_dataset = datasets.SVHN(
-            root=self.data_dir, split="train", download=True, transform=self.augmentations_train
-        )
-        self.test_dataset = datasets.SVHN(
-            root=self.data_dir, split="test", download=True, transform=self.augmentations_test
-        )
+        if self.return_index:
+            self.train_dataset = SVHN_idx(
+                root=self.data_dir, split="train", download=True, transform=self.augmentations_train
+            )
+            self.test_dataset = SVHN_idx(
+                root=self.data_dir, split="test", download=True, transform=self.augmentations_test
+            )
+        else:
+            self.train_dataset = datasets.SVHN(
+                root=self.data_dir, split="train", download=True, transform=self.augmentations_train
+            )
+            self.test_dataset = datasets.SVHN(
+                root=self.data_dir, split="test", download=True, transform=self.augmentations_test
+            )
 
 
 class CIFAR10Loader(AbstractDataLoader):
     def load_dataset(self):
-        self.train_dataset = datasets.CIFAR10(
-            root=self.data_dir, train=True, download=True, transform=self.augmentations_train
-        )
-        self.test_dataset = datasets.CIFAR10(
-            root=self.data_dir, train=False, download=True, transform=self.augmentations_test
-        )
+        if self.return_index:
+            self.train_dataset = CIFAR10_idx(
+                root=self.data_dir, train=True, download=True, transform=self.augmentations_train
+            )
+            self.test_dataset = CIFAR10_idx(
+                root=self.data_dir, train=False, download=True, transform=self.augmentations_test
+            )
+        else:
+            self.train_dataset = datasets.CIFAR10(
+                root=self.data_dir, train=True, download=True, transform=self.augmentations_train
+            )
+            self.test_dataset = datasets.CIFAR10(
+                root=self.data_dir, train=False, download=True, transform=self.augmentations_test
+            )
 
 
 class CIFAR100Loader(AbstractDataLoader):
     def load_dataset(self):
-        self.train_dataset = datasets.CIFAR100(
-            root=self.data_dir, train=True, download=True, transform=self.augmentations_train
-        )
-        self.test_dataset = datasets.CIFAR100(
-            root=self.data_dir, train=False, download=True, transform=self.augmentations_test
-        )
+        if self.return_index:
+            self.train_dataset = CIFAR100_idx(
+                root=self.data_dir, train=True, download=True, transform=self.augmentations_train
+            )
+            self.test_dataset = CIFAR100_idx(
+                root=self.data_dir, train=False, download=True, transform=self.augmentations_test
+            )
+        else:
+            self.train_dataset = datasets.CIFAR100(
+                root=self.data_dir, train=True, download=True, transform=self.augmentations_train
+            )
+            self.test_dataset = datasets.CIFAR100(
+                root=self.data_dir, train=False, download=True, transform=self.augmentations_test
+            )
 
 
 class CamVidLoader(AbstractDataLoader):

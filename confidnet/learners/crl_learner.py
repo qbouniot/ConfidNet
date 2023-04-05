@@ -1,60 +1,102 @@
-from collections import OrderedDict
-import numpy as np
+
+import time
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
 from tqdm import tqdm
+from collections import OrderedDict
 
 from confidnet.learners.learner import AbstractLearner
 from confidnet.utils import misc
+from confidnet.utils.crl_utils import negative_entropy, History
 from confidnet.utils.logger import get_logger
 from confidnet.utils.metrics import Metrics
 from confidnet.utils.losses import mixup_data,mixup_criterion,pgd_linf
 
+
 LOGGER = get_logger(__name__, level="DEBUG")
 
+class CRLLearner(AbstractLearner):
 
-class DefaultLearner(AbstractLearner):
+    def __init__(self, config_args, train_loader, val_loader, test_loader, start_epoch, device):
+        super().__init__(config_args, train_loader, val_loader, test_loader, start_epoch, device)
+
+        self.rank_target = config_args['training']['CRL']['rank_target']
+        self.dataset = config_args['training']['CRL']['dataset']
+        self.history = History(self.nsamples_train)
+        self.ranking_criterion = nn.MarginRankingLoss(margin=0.0)
 
     def train(self, epoch, eval=True):
         self.model.train()
         metrics = Metrics(
             self.metrics, self.prod_train_len, self.num_classes
         )
-        loss, len_steps, len_data = 0, 0, 0
+        tot_cls_loss, tot_rank_loss, len_steps, len_data = 0, 0, 0, 0
 
         # Training loop
         with tqdm(self.train_loader) as loop:
-            for batch_id, (data, target) in enumerate(loop):
+            # Use specific datasets that returns index of images in the batch in datasets
+            for batch_id, (data, target, idx) in enumerate(loop):
                 data, target = data.to(self.device), target.to(self.device)
                 if self.mixup_augm:
                     data, target_a, target_b, lam = mixup_data(data,target)
                 elif self.adv_augm:
                     delta = pgd_linf(self.model, data, target, epsilon=self.adv_eps, num_iter=self.adv_iter, randomize=True)
                     data = data + delta
+
                 self.optimizer.zero_grad()
                 output = self.model(data)
-                if self.task == "classification":
-                    if self.mixup_pred:
-                        current_loss = mixup_criterion(self.criterion, output, target_a, target_b, lam)
+
+                # compute ranking target value normalize (0 ~ 1) range
+                # max(softmax)
+                if self.rank_target == 'softmax':
+                    conf = F.softmax(output, dim=1)
+                    confidence, _ = conf.max(dim=1)
+                # entropy
+                elif self.rank_target == 'entropy':
+                    if self.dataset == 'cifar100':
+                        value_for_normalizing = 4.605170
                     else:
-                        if self.mixup_augm:
-                            if lam > 0.5:
-                                current_loss = self.criterion(output, target_a)
-                            else:
-                                current_loss = self.criterion(output, target_b) 
-                        else:
-                            current_loss = self.criterion(output, target)
-                elif self.task == "segmentation":
-                    current_loss = self.criterion(output, target.squeeze(dim=1))
+                        value_for_normalizing = 2.302585
+                    confidence = negative_entropy(output,
+                                                  normalize=True,
+                                                  max_value=value_for_normalizing)
+                # margin
+                elif self.rank_target == 'margin':
+                    conf, _ = torch.topk(F.softmax(output), 2, dim=1)
+                    conf[:,0] = conf[:,0] - conf[:,1]
+                    confidence = conf[:,0]
+
+                # make input pair
+                rank_input1 = confidence
+                rank_input2 = torch.roll(confidence, -1)
+                idx2 = torch.roll(idx, -1)
+
+                # calc target, margin
+                rank_target, rank_margin = self.history.get_target_margin(idx, idx2)
+                rank_target_nonzero = rank_target.clone()
+                rank_target_nonzero[rank_target_nonzero == 0] = 1
+                rank_input2 = rank_input2 + rank_margin / rank_target_nonzero
+
+                ranking_loss = self.ranking_criterion(rank_input1, rank_input2, rank_target)
+                if self.mixup_augm:
+                    if lam > 0.5:
+                        cls_loss = self.criterion(output, target_a)
+                    else:
+                        cls_loss = self.criterion(output, target_b) 
+                else:
+                    cls_loss = self.criterion(output, target)
+
+                current_loss = cls_loss + ranking_loss
                 current_loss.backward()
-                loss += current_loss
+
+                tot_cls_loss += cls_loss
+                tot_rank_loss += ranking_loss
                 self.optimizer.step()
-                if self.task == "classification":
-                    len_steps += len(data)
-                    len_data = len_steps
-                elif self.task == "segmentation":
-                    len_steps += len(data) * np.prod(data.shape[-2:])
-                    len_data += len(data)
+
+                # if self.task == "classification":
+                len_steps += len(data)
+                len_data = len_steps
 
                 # Update metrics
                 confidence, pred = F.softmax(output, dim=1).max(dim=1, keepdim=True)
@@ -65,13 +107,18 @@ class DefaultLearner(AbstractLearner):
                 loop.set_postfix(
                     OrderedDict(
                         {
-                            "loss_nll": f"{(loss / len_data):05.4e}",
+                            "loss_nll": f"{(tot_cls_loss / len_data):05.4e}",
+                            "loss_rank": f"{(tot_rank_loss / len_data):05.4e}",
                             "acc": f"{(metrics.accuracy / len_steps):05.2%}",
                         }
                     )
                 )
+                # correctness count update
+                correct = pred.t().eq(target).squeeze()
+                self.history.correctness_update(idx, correct, output)
                 loop.update()
 
+        self.history.max_correctness_update(epoch)
         # Eval on epoch end
         scores = metrics.get_scores(split="train")
         logs_dict = OrderedDict(
@@ -82,8 +129,12 @@ class DefaultLearner(AbstractLearner):
                     "string": f"{self.optimizer.param_groups[0]['lr']:05.1e}",
                 },
                 "train/loss_nll": {
-                    "value": loss / len_data,
-                    "string": f"{(loss / len_data):05.4e}",
+                    "value": tot_cls_loss / len_data,
+                    "string": f"{(tot_cls_loss / len_data):05.4e}",
+                },
+                "train/loss_rank": {
+                    "value": tot_rank_loss / len_data,
+                    "string": f"{(tot_rank_loss / len_data):05.4e}",
                 },
             }
         )
