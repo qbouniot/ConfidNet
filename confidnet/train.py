@@ -32,7 +32,7 @@ def main():
         default=False,
         help="Force training from scratch",
     )
-    parser.add_argument('--seed', default=42)
+    parser.add_argument('--seed', default=42, type=int)
     args = parser.parse_args()
 
     config_args = load_yaml(args.config_path)

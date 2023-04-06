@@ -22,8 +22,9 @@ class CRLLearner(AbstractLearner):
         super().__init__(config_args, train_loader, val_loader, test_loader, start_epoch, device)
 
         self.rank_target = config_args['training']['CRL']['rank_target']
+        LOGGER.info(f"Using CRL-{self.rank_target}")
         self.dataset = config_args['training']['CRL']['dataset']
-        self.history = History(self.nsamples_train)
+        self.history = History(self.nsamples_train + self.nsamples_val)
         self.ranking_criterion = nn.MarginRankingLoss(margin=0.0)
 
     def train(self, epoch, eval=True):
@@ -192,7 +193,7 @@ class CRLLearner(AbstractLearner):
 
         # Evaluation loop
         with tqdm(dloader, disable=not verbose) as loop:
-            for batch_id, (data, target) in enumerate(loop):
+            for batch_id, (data, target, _) in enumerate(loop):
                 data, target = data.to(self.device), target.to(self.device)
 
                 with torch.no_grad():
