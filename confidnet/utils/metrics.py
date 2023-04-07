@@ -19,6 +19,7 @@ class Metrics:
         self.accuracy = 0
         self.current_miou = 0
         self.confusion_matrix = np.zeros((self.n_classes, self.n_classes))
+        self.bins = 15
 
     def update(self, pred, target, confidence):
         self.accurate.extend(pred.eq(target.view_as(pred)).detach().to("cpu").numpy())
@@ -108,4 +109,22 @@ class Metrics:
             eaurc = aurc - ((1. - accuracy) + accuracy*np.log(accuracy))
             scores[f"{split}/aurc"] = {"value": aurc, "string": f"{aurc*1000:01.2f}"}
             scores[f"{split}/e-aurc"] = {"value": eaurc, "string": f"{eaurc*1000:01.2f}"}
+        if "ece" in self.metrics:
+            bin_boundaries = np.linspace(0, 1, self.bins + 1)
+            bin_lowers = bin_boundaries[:-1]
+            bin_uppers = bin_boundaries[1:]
+
+            ece = np.zeros(1)
+
+            for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
+                in_bin = (self.proba_pred > bin_lower) * (self.proba_pred <= bin_upper)
+                prop_in_bin = in_bin.mean()
+
+                if prop_in_bin.item() > 0.0:
+                    accuracy_in_bin = self.accurate[in_bin].mean()
+                    avg_confidence_in_bin = self.proba_pred[in_bin].mean()
+
+                    ece += np.abs(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
+
+            scores[f"{split}/ece"] = {"value": ece.item(), "string": f"{ece.item()*100}"}
         return scores

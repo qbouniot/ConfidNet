@@ -10,9 +10,9 @@ LOGGER = get_logger(__name__, level="DEBUG")
 
 class VGG16_torch(AbstractModel):
     def __init__(self, config_args, device):
-        super().__init__(config_args, device)
+        super(VGG16_torch, self).__init__(config_args, device)
 
-        self.model = models.vgg16(pretrained=False, num_classes=config_args['data']['num_classes'])
+        self.model = models.vgg16(weights=None, num_classes=config_args['data']['num_classes'])
 
     def forward(self, x):
         return self.model(x)

@@ -52,7 +52,8 @@ def main():
         "ap_success",
         "ap_errors",
         "fpr_at_95tpr",
-        "aurc"
+        "aurc",
+        "ece"
     ]
     if config_args["training"]["task"] == "segmentation":
         config_args["training"]["metrics"].append("mean_iou")
