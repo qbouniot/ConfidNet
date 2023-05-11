@@ -30,8 +30,10 @@ from confidnet.models.vgg16_selfconfid_cloning import VGG16SelfConfidCloning
 
 ###
 from confidnet.models.resnet import ResNet
+from confidnet.models.preact_resnet import PreActResNet
+from confidnet.models.plain_resnet import PlainResNet
 from confidnet.models.densenet import DenseNet3
-from confidnet.models.model_torchhub import VGG16_torch
+from confidnet.models.model_torchhub import VGG16_torch,Resnet101_torch
 
 def get_model(config_args, device):
     """
@@ -66,8 +68,11 @@ def get_model(config_args, device):
         "segnet_selfconfid_cloning": SegnetSelfConfidCloning,
         "segnet_oodconfid": SegNetOODConfid,
         "resnet": ResNet,
+        "preact_resnet": PreActResNet,
+        "plain_resnet": PlainResNet,
         "densenet": DenseNet3,
         "vgg16_torch": VGG16_torch,
+        "resnet101_torch": Resnet101_torch
     }
 
     return model_factory[config_args["model"]["name"]](config_args=config_args, device=device)

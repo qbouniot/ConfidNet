@@ -176,7 +176,7 @@ CUSTOM_LOSS = {
     "ood_confidence": OODConfidenceLoss,
 }
 
-def mixup_data(x, y, alpha=1.0):
+def mixup_data(x, y, alpha=1.0, intra_class=False, inter_class=False, mixup_norm=False):
     '''Returns mixed inputs, pairs of targets, and lambda'''
     if alpha > 0:
         lam = np.random.beta(alpha, alpha)
@@ -184,9 +184,35 @@ def mixup_data(x, y, alpha=1.0):
         lam = 1
 
     batch_size = x.size()[0]
-    index = torch.randperm(batch_size, device=x.device)
-
-    mixed_x = lam * x + (1 - lam) * x[index, :]
+    if intra_class:
+        clss = torch.unique(y)
+        index = torch.arange(batch_size, device=y.device)
+        for cls in clss:
+            cls_index_mask = y == cls
+            cls_index = torch.arange(batch_size, device=y.device)[cls_index_mask]
+            new_cls_index = cls_index[torch.randperm(cls_index.size(0))]
+            index[cls_index] = new_cls_index
+    elif inter_class:
+        clss = torch.randperm(torch.unique(y).size(0))
+        orig_index = torch.arange(batch_size, device=y.device)
+        index = torch.arange(batch_size, device=y.device)
+        perm = torch.randperm(batch_size, device=y.device)
+        taken = torch.zeros(batch_size, device=y.device)
+        for cls in clss:
+            cls_index_mask = y == cls
+            cls_index = orig_index[cls_index_mask]
+            for ind in cls_index:
+                for i,elt in enumerate(perm):
+                    if taken[i] == 0 and y[elt] != cls:
+                        index[ind] = elt
+                        taken[i] = 1
+                        break
+    else:
+        index = torch.randperm(batch_size, device=x.device)
+    if mixup_norm:
+        mixed_x = x + (1-lam) * (x[index, :] - x) / torch.linalg.norm(x[index, :] - x, dim=(-2,-1), keepdim=True)
+    else:
+        mixed_x = lam * x + (1 - lam) * x[index, :]
     y_a, y_b = y, y[index]
     return mixed_x, y_a, y_b, lam
 

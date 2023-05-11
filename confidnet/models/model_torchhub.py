@@ -16,3 +16,12 @@ class VGG16_torch(AbstractModel):
 
     def forward(self, x):
         return self.model(x)
+    
+class Resnet101_torch(AbstractModel):
+    def __init__(self, config_args, device):
+        super(Resnet101_torch, self).__init__(config_args, device)
+
+        self.model = models.resnet101(weights=None, num_classes=config_args['data']['num_classes'])
+
+    def forward(self, x):
+        return self.model(x)

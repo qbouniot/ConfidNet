@@ -19,7 +19,7 @@ class Metrics:
         self.accuracy = 0
         self.current_miou = 0
         self.confusion_matrix = np.zeros((self.n_classes, self.n_classes))
-        self.bins = 15
+        self.bins = 100
 
     def update(self, pred, target, confidence):
         self.accurate.extend(pred.eq(target.view_as(pred)).detach().to("cpu").numpy())

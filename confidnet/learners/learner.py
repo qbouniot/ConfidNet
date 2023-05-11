@@ -27,8 +27,21 @@ class AbstractLearner:
         if self.mixup_pred:
             LOGGER.info(f"Using mixup predictions")
         self.mixup_augm = config_args["training"].get("mixup_augm", False)
+        self.mixup_alpha = config_args["training"].get("mixup_alpha", 1.0)
         if self.mixup_augm:
-            LOGGER.info(f"Using mixup augmentation")
+            LOGGER.info(f"Using mixup augmentation with alpha = {self.mixup_alpha}")
+        self.regmixup = config_args["training"].get("regmixup", False)
+        if self.regmixup:
+            LOGGER.info(f"Using regmixup with alpha = {self.mixup_alpha}")
+        self.intra_class = config_args["training"].get("intra_class", False)
+        if self.intra_class:
+            LOGGER.info(f"Using intra class mixup !")
+        self.inter_class = config_args["training"].get("inter_class", False)
+        if self.inter_class:
+            LOGGER.info(f"Using inter class mixup !")
+        self.mixup_norm = config_args["training"].get("mixup_norm", False)
+        if self.mixup_norm:
+            LOGGER.info(f"Using normalized mixup")
         self.adv_augm = config_args["training"].get("adv_augm", False)
         if self.adv_augm:
             LOGGER.info(f"Using adv augmentation")

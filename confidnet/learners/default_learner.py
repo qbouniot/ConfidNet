@@ -27,21 +27,28 @@ class DefaultLearner(AbstractLearner):
             for batch_id, (data, target) in enumerate(loop):
                 data, target = data.to(self.device), target.to(self.device)
                 if self.mixup_augm:
-                    data, target_a, target_b, lam = mixup_data(data,target)
+                    data, target_a, target_b, lam = mixup_data(data,target,self.mixup_alpha, self.intra_class, self.inter_class, self.mixup_norm)
                 elif self.adv_augm:
                     delta = pgd_linf(self.model, data, target, epsilon=self.adv_eps, num_iter=self.adv_iter, randomize=True)
                     data = data + delta
-                self.optimizer.zero_grad()
+                elif self.regmixup:
+                    mix_data, part_target_a, part_target_b, lam = mixup_data(data, target, self.mixup_alpha)
+                    target_a = torch.cat([target, part_target_a])
+                    target_b = torch.cat([target, part_target_b])
+                    data = torch.cat([data, mix_data], dim=0)
+                self.optimizer.zero_grad()                
                 output = self.model(data)
                 if self.task == "classification":
-                    if self.mixup_pred:
+                    if self.mixup_pred or self.regmixup:
                         current_loss = mixup_criterion(self.criterion, output, target_a, target_b, lam)
                     else:
                         if self.mixup_augm:
                             if lam > 0.5:
+                                # current_loss = self.criterion(output, target_a) + (1-lam) * self.criterion(output, target_b)
                                 current_loss = self.criterion(output, target_a)
                             else:
-                                current_loss = self.criterion(output, target_b) 
+                                # current_loss = self.criterion(output, target_b) + (1-lam) * self.criterion(output, target_a)
+                                current_loss = self.criterion(output, target_b)
                         else:
                             current_loss = self.criterion(output, target)
                 elif self.task == "segmentation":
@@ -57,7 +64,10 @@ class DefaultLearner(AbstractLearner):
                     len_data += len(data)
 
                 # Update metrics
-                confidence, pred = F.softmax(output, dim=1).max(dim=1, keepdim=True)
+                if self.regmixup:
+                    confidence, pred = F.softmax(output[:target.shape[0]], dim=1).max(dim=1, keepdim=True)
+                else:
+                    confidence, pred = F.softmax(output, dim=1).max(dim=1, keepdim=True)
                 metrics.update(pred, target, confidence)
 
                 # Update the average loss
