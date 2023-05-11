@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.metrics import average_precision_score, roc_auc_score, auc
-
+import torch.nn.functional as F
+import torch
 
 def _fast_hist(label_true, label_pred, n_class):
     mask = (label_true >= 0) & (label_true < n_class)
@@ -20,12 +21,16 @@ class Metrics:
         self.current_miou = 0
         self.confusion_matrix = np.zeros((self.n_classes, self.n_classes))
         self.bins = 100
+        self.logits, self.targets = [], []
 
-    def update(self, pred, target, confidence):
+    def update(self, pred, target, confidence, logit=None):
         self.accurate.extend(pred.eq(target.view_as(pred)).detach().to("cpu").numpy())
         self.accuracy += pred.eq(target.view_as(pred)).sum().item()
         self.errors.extend((pred != target.view_as(pred)).detach().to("cpu").numpy())
-        self.proba_pred.extend(confidence.detach().to("cpu").numpy())
+        self.proba_pred.extend(confidence.detach().to("cpu").numpy()) # proba_pred = softmax_max = torch.max(softmax,1)[0]
+        if logit is not None:
+            self.logits.extend(logit.detach().to("cpu").numpy())
+        self.targets.extend(target.detach().to("cpu").numpy())
 
         if "mean_iou" in self.metrics:
             pred = pred.cpu().numpy().flatten()
@@ -41,6 +46,8 @@ class Metrics:
         self.accurate = np.reshape(self.accurate, newshape=(len(self.accurate), -1)).flatten()
         self.errors = np.reshape(self.errors, newshape=(len(self.errors), -1)).flatten()
         self.proba_pred = np.reshape(self.proba_pred, newshape=(len(self.proba_pred), -1)).flatten()
+        self.logits = np.array(self.logits)
+        self.targets = np.array(self.targets)
 
         scores = {}
         if "accuracy" in self.metrics:
@@ -127,4 +134,18 @@ class Metrics:
                     ece += np.abs(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
 
             scores[f"{split}/ece"] = {"value": ece.item(), "string": f"{ece.item()*100}"}
+        if "brier" in self.metrics:
+            softmax = F.softmax(torch.tensor(self.logits, dtype=torch.float), dim=1)
+            label_one_hot = F.one_hot(torch.tensor(self.targets, dtype=int))
+
+            brier_score = torch.mean(torch.sum((softmax - label_one_hot) ** 2, dim=1))
+            scores[f"{split}/brier"] = {"value": brier_score.item(), "string": f"{brier_score.item()*100}"}
+        if "nll" in self.metrics:
+            logsoftmax = F.log_softmax(torch.tensor(self.logits, dtype=torch.float), dim=1)
+            out = torch.tensor(self.targets, dtype=torch.float)
+            for i in range(len(self.targets)):
+                out[i] = logsoftmax[i][self.targets[i]]
+
+            nll_score = -out.sum()/len(out)
+            scores[f"{split}/nll"] = {"value": nll_score.item(), "string": f"{nll_score.item()*100}"}
         return scores

@@ -203,7 +203,7 @@ class DefaultLearner(AbstractLearner):
                         confidence = (probs * torch.log(probs + 1e-9)).sum(dim=1)  # entropy
                         pred = probs.max(dim=1, keepdim=True)[1]
 
-                    metrics.update(pred, target, confidence)
+                    metrics.update(pred, target, confidence, output) # /!\ Move for TCP
 
         scores = metrics.get_scores(split=split)
         losses = {"loss_nll": loss}
