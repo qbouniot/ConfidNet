@@ -138,7 +138,7 @@ class DefaultLearner(AbstractLearner):
             self.scheduler.step()
 
     def evaluate(
-        self, dloader, len_dataset, split="test", mode="mcp", samples=50, verbose=False
+        self, dloader, len_dataset, split="test", mode="mcp", samples=50, verbose=False, return_confidences=False
     ):
         self.model.eval()
         metrics = Metrics(self.metrics, len_dataset, self.num_classes)
@@ -207,4 +207,8 @@ class DefaultLearner(AbstractLearner):
 
         scores = metrics.get_scores(split=split)
         losses = {"loss_nll": loss}
-        return losses, scores
+        if return_confidences:
+            conf = metrics.get_confidences()
+            return losses, scores, conf
+        else:
+            return losses, scores

@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from tqdm import tqdm
+import pickle
 
 from confidnet.loaders import get_loader
 from confidnet.learners import get_learner
@@ -37,6 +38,11 @@ def main():
     parser.add_argument(
         "--no-cuda", action="store_true", default=False, help="disables CUDA training"
     )
+
+    parser.add_argument(
+        "--get-confidences", action="store_true", default=False
+    )
+
     args = parser.parse_args()
 
     LOGGER.info(f"Args used: {args}")
@@ -54,7 +60,8 @@ def main():
         "fpr_at_95tpr",
         "aurc",
         "ece",
-        "brier"
+        "brier",
+        "nll"
     ]
     if config_args["training"]["task"] == "segmentation":
         config_args["training"]["metrics"].append("mean_iou")
@@ -88,14 +95,20 @@ def main():
     LOGGER.info(f"Inference mode: {args.mode}")
 
     if args.mode != "trust_score":
-        _, scores_test = learner.evaluate(
+        results = learner.evaluate(
             learner.test_loader,
             learner.prod_test_len,
             split="test",
             mode=args.mode,
             samples=args.samples,
             verbose=True,
+            return_confidences=args.get_confidences
         )
+
+        scores_test = results[1]
+
+        if args.get_confidences:
+            conf = results[2]
 
     # Special case TrustScore
     else:
@@ -210,6 +223,11 @@ def main():
         print(st)
         print(scores_test[st])
         print("----------------------------------------------------------------")
+
+    if args.get_confidences:
+        LOGGER.info("Saving confidence scores")
+        with open(config_args["training"]["output_folder"] / f"confidence_scores.pkl", "wb") as f:
+            pickle.dump(conf, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == "__main__":

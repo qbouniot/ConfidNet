@@ -42,6 +42,9 @@ class Metrics:
             ).reshape(self.n_classes, self.n_classes)
             self.confusion_matrix += hist
 
+    def get_confidences(self):
+        return self.proba_pred
+
     def get_scores(self, split="train"):
         self.accurate = np.reshape(self.accurate, newshape=(len(self.accurate), -1)).flatten()
         self.errors = np.reshape(self.errors, newshape=(len(self.errors), -1)).flatten()
@@ -134,13 +137,13 @@ class Metrics:
                     ece += np.abs(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
 
             scores[f"{split}/ece"] = {"value": ece.item(), "string": f"{ece.item()*100}"}
-        if "brier" in self.metrics:
+        if "brier" in self.metrics and len(self.logits) > 0:
             softmax = F.softmax(torch.tensor(self.logits, dtype=torch.float), dim=1)
             label_one_hot = F.one_hot(torch.tensor(self.targets, dtype=int))
 
             brier_score = torch.mean(torch.sum((softmax - label_one_hot) ** 2, dim=1))
             scores[f"{split}/brier"] = {"value": brier_score.item(), "string": f"{brier_score.item()*100}"}
-        if "nll" in self.metrics:
+        if "nll" in self.metrics and len(self.logits) > 0:
             logsoftmax = F.log_softmax(torch.tensor(self.logits, dtype=torch.float), dim=1)
             out = torch.tensor(self.targets, dtype=torch.float)
             for i in range(len(self.targets)):

@@ -35,6 +35,8 @@ from confidnet.models.plain_resnet import PlainResNet
 from confidnet.models.densenet import DenseNet3
 from confidnet.models.model_torchhub import VGG16_torch,Resnet101_torch
 
+from confidnet.models.mlp_selfconfid_online import MLPSelfConfidOnline
+
 def get_model(config_args, device):
     """
         Return a new instance of model
@@ -47,6 +49,7 @@ def get_model(config_args, device):
         "mlp_selfconfid": MLPSelfConfid,
         "mlp_selfconfid_cloning": MLPSelfConfidCloning,
         "mlp_oodconfid": MLPOODConfid,
+        "mlp_selfconfid_online": MLPSelfConfidOnline,
         "small_convnet_mnist": SmallConvNetMNIST,
         "small_convnet_mnist_extractor": SmallConvNetMNISTExtractor,
         "small_convnet_mnist_selfconfid_classic": SmallConvNetMNISTSelfConfidClassic,

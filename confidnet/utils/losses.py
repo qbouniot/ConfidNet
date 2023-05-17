@@ -1,4 +1,4 @@
-import structured_map_ranking_loss
+# import structured_map_ranking_loss
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -162,6 +162,29 @@ class OODConfidenceLoss(nn.modules.loss._Loss):
                 self.lbda /= 1.01
         return total_loss
 
+class SelfConfidOnlineLoss(nn.modules.loss._Loss):
+    def __init__(self, config_args, device):
+        self.nb_classes = config_args["data"]["num_classes"]
+        self.task = config_args["training"]["task"]
+        self.weighting = config_args["training"]["loss"]["weighting"]
+        self.device = device
+        super().__init__()
+
+    def forward(self, input, target):
+        # probs_pred = F.softmax(input[0], dim=1)
+        probs_confid = F.softmax(input[2], dim=1)
+        confidence = torch.sigmoid(input[1]).squeeze()
+        # Apply optional weighting
+        weights = torch.ones_like(target).type(torch.FloatTensor).to(self.device)
+        weights[(probs_confid.argmax(dim=1) != target)] *= self.weighting
+        labels_hot = misc.one_hot_embedding(target, self.nb_classes).to(self.device)
+        # Segmentation special case
+        # if self.task == "segmentation":
+        #     labels_hot = labels_hot.permute(0, 3, 1, 2)
+        loss_confid = torch.mean(weights * (confidence - (probs_confid * labels_hot).sum(dim=1)) ** 2)
+        loss_class = F.cross_entropy(input[0], target)
+        loss_class_confid = F.cross_entropy(input[2], target)
+        return loss_confid, loss_class, loss_class_confid
 
 # PYTORCH LOSSES LISTS
 PYTORCH_LOSS = {"cross_entropy": nn.CrossEntropyLoss}
@@ -174,6 +197,7 @@ CUSTOM_LOSS = {
     "focal": FocalLoss,
     "ranking": StructuredMAPRankingLoss,
     "ood_confidence": OODConfidenceLoss,
+    "selfconfid_online": SelfConfidOnlineLoss,
 }
 
 def mixup_data(x, y, alpha=1.0, intra_class=False, inter_class=False, mixup_norm=False):
