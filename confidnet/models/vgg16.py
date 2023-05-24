@@ -74,7 +74,7 @@ class VGG16(AbstractModel):
         self.dropout_fc = nn.Dropout(0.5)
         self.fc2 = nn.Linear(512, config_args["data"]["num_classes"])
 
-    def forward(self, x):
+    def forward(self, x, get_feats=False):
         out = F.relu(self.conv1(x))
         out = self.conv1_bn(out)
         if self.mc_dropout:
@@ -147,14 +147,18 @@ class VGG16(AbstractModel):
             out = F.dropout(out, 0.5, training=self.training)
         else:
             out = self.end_dropout(out)
-        out = out.view(out.size(0), -1)
-        out = F.relu(self.fc1(out))
+        feats = out.view(out.size(0), -1)
+        
+        out = F.relu(self.fc1(feats))
         if self.mc_dropout:
             out = F.dropout(out, 0.5, training=self.training)
         else:
             out = self.dropout_fc(out)
         out = self.fc2(out)
-        return out
+        if not get_feats:
+            return out
+        else:
+            return out, feats
 
     def init_vgg16_params(self):
         vgg16 = models.vgg16(pretrained=True).to(self.device)

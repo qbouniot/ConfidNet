@@ -172,7 +172,7 @@ class SelfConfidOnlineLoss(nn.modules.loss._Loss):
 
     def forward(self, input, target):
         # probs_pred = F.softmax(input[0], dim=1)
-        probs_confid = F.softmax(input[2], dim=1)
+        probs_confid = F.softmax(input[2], dim=1).detach()
         confidence = torch.sigmoid(input[1]).squeeze()
         # Apply optional weighting
         weights = torch.ones_like(target).type(torch.FloatTensor).to(self.device)
@@ -200,7 +200,7 @@ CUSTOM_LOSS = {
     "selfconfid_online": SelfConfidOnlineLoss,
 }
 
-def mixup_data(x, y, alpha=1.0, intra_class=False, inter_class=False, mixup_norm=False):
+def mixup_data(x, y, alpha=1.0, intra_class=False, inter_class=False, mixup_norm=False, get_index=True):
     '''Returns mixed inputs, pairs of targets, and lambda'''
     if alpha > 0:
         lam = np.random.beta(alpha, alpha)
@@ -238,11 +238,21 @@ def mixup_data(x, y, alpha=1.0, intra_class=False, inter_class=False, mixup_norm
     else:
         mixed_x = lam * x + (1 - lam) * x[index, :]
     y_a, y_b = y, y[index]
-    return mixed_x, y_a, y_b, lam
+    if not get_index:
+        return mixed_x, y_a, y_b, lam
+    else:
+        return mixed_x, y_a, y_b, lam, index
 
 
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
+
+def similarity_mixup_criterion(criterion, pred, y_a, y_b, lam, cos):
+    old_reduction = criterion.reduction
+    criterion.reduction = 'none'
+    loss = torch.mean(criterion(pred, y_a) * (1 - cos + lam*cos) + (1 - lam) * cos * criterion(pred, y_b))
+    criterion.reduction = old_reduction
+    return loss
 
 def pgd_linf(model, X, y, epsilon=0.1, alpha=0.01, num_iter=20, randomize=False):
     """Construct an adversarial perturbation for a given batch of images X using ground truth y and a given model with a L_inf-PGD attack.

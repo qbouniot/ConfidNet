@@ -54,7 +54,7 @@ def main():
 
     config_args["training"]["metrics"] = [
         "accuracy",
-        "auc",
+        "auroc",
         "ap_success",
         "ap_errors",
         "fpr_at_95tpr",

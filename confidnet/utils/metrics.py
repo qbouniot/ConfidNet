@@ -56,12 +56,12 @@ class Metrics:
         if "accuracy" in self.metrics:
             accuracy = self.accuracy / self.len_dataset
             scores[f"{split}/accuracy"] = {"value": accuracy, "string": f"{accuracy:05.2%}"}
-        if "auc" in self.metrics:
+        if "auroc" in self.metrics:
             if len(np.unique(self.accurate)) == 1:
                 auc_score = 1
             else:
                 auc_score = roc_auc_score(self.accurate, self.proba_pred)
-            scores[f"{split}/auc"] = {"value": auc_score, "string": f"{auc_score:05.2%}"}
+            scores[f"{split}/auroc"] = {"value": auc_score, "string": f"{auc_score:05.2%}"}
         if "ap_success" in self.metrics:
             ap_success = average_precision_score(self.accurate, self.proba_pred)
             scores[f"{split}/ap_success"] = {"value": ap_success, "string": f"{ap_success:05.2%}"}

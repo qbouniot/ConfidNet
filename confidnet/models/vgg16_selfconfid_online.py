@@ -3,7 +3,7 @@ from confidnet.models.vgg16 import VGG16
 from confidnet.models.vgg16_selfconfid_classic import VGG16SelfConfidClassic
 
 
-class VGG16SelfConfidCloning(AbstractModel):
+class VGG16SelfConfidOnline(AbstractModel):
     def __init__(self, config_args, device):
         super().__init__(config_args, device)
         self.pred_network = VGG16(config_args, device)

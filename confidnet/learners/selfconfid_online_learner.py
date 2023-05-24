@@ -20,7 +20,7 @@ class OnlineConfidLearner(AbstractLearner):
     def __init__(self, config_args, train_loader, val_loader, test_loader, start_epoch, device):
         super().__init__(config_args, train_loader, val_loader, test_loader, start_epoch, device)
         # self.freeze_layers()
-        self.freeze_encoder()
+        self.freeze_encoder(verbose=True)
         # self.disable_bn(verbose=True)
         if self.config_args["model"].get("uncertainty", None):
             self.disable_dropout_encoder(verbose=True)
@@ -28,6 +28,10 @@ class OnlineConfidLearner(AbstractLearner):
         LOGGER.info(f"Using a starting ema rate of {self.ema_rate}")
         self.mom_sched = self.config_args["model"].get("momentum_scheduler", "constant")
         LOGGER.info(f"Using a {self.mom_sched} ema scheduling")
+        self.warmup_epochs = self.config_args["model"].get("warmup_epochs", 0)
+        LOGGER.info(f"Warming up for {self.warmup_epochs} epochs")
+        if self.warmup_epochs > 0:
+            self.freeze_uncertainty(verbose=True)
 
     def train(self, epoch, eval=True):
         self.model.train()
@@ -46,7 +50,14 @@ class OnlineConfidLearner(AbstractLearner):
         loss, confid_loss, class_loss, class_confid_loss = 0, 0, 0, 0
         len_steps, len_data = 0, 0
 
-        curr_ema_rate = self.update_momentum_rate(epoch)
+        if epoch < self.warmup_epochs:
+            curr_ema_rate = 0.
+        elif epoch == self.warmup_epochs:
+            self.unfreeze_uncertainty(verbose=True)
+            curr_ema_rate = self.update_momentum_rate(epoch)
+        else:
+            curr_ema_rate = self.update_momentum_rate(epoch)
+        # self.update_momentum_encoder(curr_ema_rate)
 
         # Training loop
         with tqdm(self.train_loader) as loop:
@@ -318,6 +329,27 @@ class OnlineConfidLearner(AbstractLearner):
             else:
                 if verbose:
                     LOGGER.info(f"{param[0]} kept training")
+
+    def freeze_uncertainty(self, verbose=False):
+        if verbose:
+            LOGGER.info("Freezing uncertainty network")
+        for param in self.model.uncertainty_network.named_parameters():
+            # if "uncertainty" not in param[0]:
+            param[1].requires_grad = False
+            if verbose:
+                LOGGER.info(f"{param[0]} frozen")
+            # else:
+            #     if verbose:
+            #         LOGGER.info(f"{param[0]} kept training")
+
+    def unfreeze_uncertainty(self, verbose=False):
+        if verbose:
+            LOGGER.info("Unfreezing uncertainty network")
+        for param in self.model.uncertainty_network.named_parameters():
+            if "uncertainty" in param[0]:
+                param[1].requires_grad = False
+                if verbose:
+                    LOGGER.info(f"{param[0]} unfrozen")
 
     def disable_dropout_encoder(self, verbose=False):
         if verbose:

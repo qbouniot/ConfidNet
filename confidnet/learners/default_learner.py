@@ -8,7 +8,7 @@ from confidnet.learners.learner import AbstractLearner
 from confidnet.utils import misc
 from confidnet.utils.logger import get_logger
 from confidnet.utils.metrics import Metrics
-from confidnet.utils.losses import mixup_data,mixup_criterion,pgd_linf
+from confidnet.utils.losses import mixup_data,mixup_criterion,pgd_linf,similarity_mixup_criterion
 
 LOGGER = get_logger(__name__, level="DEBUG")
 
@@ -36,11 +36,20 @@ class DefaultLearner(AbstractLearner):
                     target_a = torch.cat([target, part_target_a])
                     target_b = torch.cat([target, part_target_b])
                     data = torch.cat([data, mix_data], dim=0)
+                elif self.sim_mixup:
+                    with torch.no_grad():
+                        _, feats = self.model(data, get_feats=True)
+                        feats = feats.detach()
+                    data, target_a, target_b, lam, index = mixup_data(data, target, self.mixup_alpha, get_index=True)
+                    cos = F.cosine_similarity(feats, feats[index])
+
                 self.optimizer.zero_grad()                
                 output = self.model(data)
                 if self.task == "classification":
                     if self.mixup_pred or self.regmixup:
                         current_loss = mixup_criterion(self.criterion, output, target_a, target_b, lam)
+                    elif self.sim_mixup:
+                        current_loss = similarity_mixup_criterion(self.criterion, output, target_a, target_b, lam, cos)
                     else:
                         if self.mixup_augm:
                             if lam > 0.5:
