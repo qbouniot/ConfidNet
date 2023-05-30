@@ -2,6 +2,8 @@ import numpy as np
 from sklearn.metrics import average_precision_score, roc_auc_score, auc
 import torch.nn.functional as F
 import torch
+from .losses import get_nll
+from scipy.optimize import minimize
 
 def _fast_hist(label_true, label_pred, n_class):
     mask = (label_true >= 0) & (label_true < n_class)
@@ -23,14 +25,17 @@ class Metrics:
         self.bins = 100
         self.logits, self.targets = [], []
 
-    def update(self, pred, target, confidence, logit=None):
-        self.accurate.extend(pred.eq(target.view_as(pred)).detach().to("cpu").numpy())
-        self.accuracy += pred.eq(target.view_as(pred)).sum().item()
-        self.errors.extend((pred != target.view_as(pred)).detach().to("cpu").numpy())
-        self.proba_pred.extend(confidence.detach().to("cpu").numpy()) # proba_pred = softmax_max = torch.max(softmax,1)[0]
+    def update(self, pred=None, target=None, confidence=None, logit=None):
+        if pred is not None and target is not None:
+            self.accurate.extend(pred.eq(target.view_as(pred)).detach().to("cpu").numpy())
+            self.accuracy += pred.eq(target.view_as(pred)).sum().item()
+            self.errors.extend((pred != target.view_as(pred)).detach().to("cpu").numpy())
+        if confidence is not None:
+            self.proba_pred.extend(confidence.detach().to("cpu").numpy()) # proba_pred = softmax_max = torch.max(softmax,1)[0]
         if logit is not None:
             self.logits.extend(logit.detach().to("cpu").numpy())
-        self.targets.extend(target.detach().to("cpu").numpy())
+        if target is not None:
+            self.targets.extend(target.detach().to("cpu").numpy())
 
         if "mean_iou" in self.metrics:
             pred = pred.cpu().numpy().flatten()
@@ -41,6 +46,26 @@ class Metrics:
                 minlength=self.n_classes ** 2,
             ).reshape(self.n_classes, self.n_classes)
             self.confusion_matrix += hist
+
+    def get_temp(self):
+        self.logits = np.array(self.logits)
+        self.targets = np.array(self.targets)
+
+        f = lambda t: get_nll(torch.tensor(self.logits / t, dtype=torch.float), self.targets).numpy()
+
+        res = minimize(f, 1, method='nelder-mead', options={'xtol': 1e-3})
+
+        # logsoftmax = F.log_softmax(torch.tensor(self.logits, dtype=torch.float), dim=1)
+        # out = torch.tensor(self.targets, dtype=torch.float)
+        # for i in range(len(self.targets)):
+        #     out[i] = logsoftmax[i][self.targets[i]]
+
+        # nll_score = -out.sum()/len(out)
+
+        return res.x[0]
+
+
+
 
     def get_confidences(self):
         return self.proba_pred

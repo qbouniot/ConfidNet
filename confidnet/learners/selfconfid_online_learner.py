@@ -3,6 +3,7 @@ from collections import OrderedDict
 
 import numpy as np
 import torch
+import torch.optim as optim
 from tqdm import tqdm
 
 import torch.nn.functional as F
@@ -21,7 +22,7 @@ class OnlineConfidLearner(AbstractLearner):
         super().__init__(config_args, train_loader, val_loader, test_loader, start_epoch, device)
         # self.freeze_layers()
         self.freeze_encoder(verbose=True)
-        # self.disable_bn(verbose=True)
+        self.disable_bn_encoder(verbose=True)
         if self.config_args["model"].get("uncertainty", None):
             self.disable_dropout_encoder(verbose=True)
         self.ema_rate = self.config_args["model"].get("ema_rate", 0.996)
@@ -33,9 +34,24 @@ class OnlineConfidLearner(AbstractLearner):
         if self.warmup_epochs > 0:
             self.freeze_uncertainty(verbose=True)
 
+    def set_optimizer(self, optimizer_name):
+        optimizer_params = {
+            k: v for k, v in self.config_args["training"]["optimizer"].items() if k != "name"
+        }
+        LOGGER.info(f"Using optimizer {optimizer_name}")
+        if optimizer_name == "sgd":
+            self.optimizer = optim.SGD([p for n,p in self.model.named_parameters() if 'pred_network' in n or 'uncertainty_network.uncertainty' in n], **optimizer_params)
+        elif optimizer_name == "adam":
+            self.optimizer = optim.Adam([p for n,p in self.model.named_parameters() if 'pred_network' in n or 'uncertainty_network.uncertainty' in n], **optimizer_params)
+        elif optimizer_name == "adadelta":
+            self.optimizer = optim.Adadelta([p for n,p in self.model.named_parameters() if 'pred_network' in n or 'uncertainty_network.uncertainty' in n], **optimizer_params)
+        else:
+            raise KeyError("Bad optimizer name or not implemented (sgd, adam, adadelta).")
+
+
     def train(self, epoch, eval=True):
         self.model.train()
-        # self.disable_bn()
+        self.disable_bn_encoder()
         if self.config_args["model"].get("uncertainty", None):
             self.disable_dropout_encoder()
         metrics_mcp_pred = Metrics(
@@ -347,7 +363,7 @@ class OnlineConfidLearner(AbstractLearner):
             LOGGER.info("Unfreezing uncertainty network")
         for param in self.model.uncertainty_network.named_parameters():
             if "uncertainty" in param[0]:
-                param[1].requires_grad = False
+                param[1].requires_grad = True
                 if verbose:
                     LOGGER.info(f"{param[0]} unfrozen")
 
@@ -359,6 +375,17 @@ class OnlineConfidLearner(AbstractLearner):
                 if verbose:
                     LOGGER.info(f"{layer[0]} set to eval to remove dropout")
                 layer[1].eval()
+
+    def disable_bn_encoder(self, verbose=False):
+        if verbose:
+            LOGGER.info("Keeping original BN parameters")
+        for layer in self.model.uncertainty_network.named_modules():
+            if "bn" in layer[0] or "cbr_unit.1" in layer[0]:
+                if verbose:
+                    print(layer[0], "original BN setting")
+                layer[1].momentum = 0
+                layer[1].eval()
+
 
     def update_momentum_encoder(self, ema_rate=0.996):
         uncertainty_params = OrderedDict(self.model.uncertainty_network.named_parameters())

@@ -43,6 +43,14 @@ def main():
         "--get-confidences", action="store_true", default=False
     )
 
+    parser.add_argument(
+        "--val_temp_scaling", action="store_true", default=False
+    )
+
+    parser.add_argument(
+        "--opt_temp_scaling", action="store_true", default=True
+    )
+
     args = parser.parse_args()
 
     LOGGER.info(f"Args used: {args}")
@@ -54,10 +62,10 @@ def main():
 
     config_args["training"]["metrics"] = [
         "accuracy",
-        "auroc",
-        "ap_success",
-        "ap_errors",
         "fpr_at_95tpr",
+        "ap_errors",
+        "ap_success",
+        "auroc",
         "aurc",
         "ece",
         "brier",
@@ -228,6 +236,72 @@ def main():
         LOGGER.info("Saving confidence scores")
         with open(config_args["training"]["output_folder"] / f"confidence_scores.pkl", "wb") as f:
             pickle.dump(conf, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    if args.val_temp_scaling:
+        val_temp = learner.find_temp(split='val')
+        LOGGER.info(f"Best temperature found on val set : {val_temp}")
+
+        if args.mode != "trust_score":
+            results_val_ts = learner.evaluate(
+                learner.test_loader,
+                learner.prod_test_len,
+                split="test",
+                mode=args.mode,
+                samples=args.samples,
+                verbose=True,
+                return_confidences=args.get_confidences,
+                temp=val_temp
+            )
+
+            scores_test_val_ts = results_val_ts[1]
+
+            if args.get_confidences:
+                conf_val_ts = results_val_ts[2]
+
+        LOGGER.info("Results")
+        print("----------------------------------------------------------------")
+        for st in scores_test_val_ts:
+            print(st)
+            print(scores_test_val_ts[st])
+            print("----------------------------------------------------------------")
+
+        if args.get_confidences:
+            LOGGER.info("Saving confidence scores")
+            with open(config_args["training"]["output_folder"] / f"confidence_scores_val_ts.pkl", "wb") as f:
+                pickle.dump(conf_val_ts, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    if args.opt_temp_scaling:
+        test_temp = learner.find_temp(split='test')
+        LOGGER.info(f"Best temperature found on test set : {test_temp}")
+
+        if args.mode != "trust_score":
+            results_temp_ts = learner.evaluate(
+                learner.test_loader,
+                learner.prod_test_len,
+                split="test",
+                mode=args.mode,
+                samples=args.samples,
+                verbose=True,
+                return_confidences=args.get_confidences,
+                temp=test_temp
+            )
+
+            scores_test_temp_ts = results_temp_ts[1]
+
+            if args.get_confidences:
+                conf_temp_ts = results_temp_ts[2]
+
+        LOGGER.info("Results")
+        print("----------------------------------------------------------------")
+        for st in scores_test_temp_ts:
+            print(st)
+            print(scores_test_temp_ts[st])
+            print("----------------------------------------------------------------")
+
+        if args.get_confidences:
+            LOGGER.info("Saving confidence scores")
+            with open(config_args["training"]["output_folder"] / f"confidence_scores_temp_ts.pkl", "wb") as f:
+                pickle.dump(conf_temp_ts, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == "__main__":

@@ -250,7 +250,7 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
 def similarity_mixup_criterion(criterion, pred, y_a, y_b, lam, cos):
     old_reduction = criterion.reduction
     criterion.reduction = 'none'
-    loss = torch.mean(criterion(pred, y_a) * (1 - cos + lam*cos) + (1 - lam) * cos * criterion(pred, y_b))
+    loss = torch.mean(criterion(pred, y_a) * (1 - (1 - lam) * (cos + 1) / 2) + (1 - lam) * (cos + 1) * criterion(pred, y_b) / 2)
     criterion.reduction = old_reduction
     return loss
 
@@ -279,3 +279,11 @@ def pgd_linf(model, X, y, epsilon=0.1, alpha=0.01, num_iter=20, randomize=False)
         delta.data = (delta + alpha*delta.grad.detach().sign()).clamp(-epsilon,epsilon)
         delta.grad.zero_()
     return delta.detach()
+
+def get_nll(logits, targets):
+    logsoftmax = F.log_softmax(logits, dim=1)
+    out = torch.tensor(targets, dtype=torch.float)
+    for i in range(len(targets)):
+            out[i] = logsoftmax[i][targets[i]]
+
+    return -out.sum()/len(out)

@@ -42,13 +42,23 @@ class DefaultLearner(AbstractLearner):
                         feats = feats.detach()
                     data, target_a, target_b, lam, index = mixup_data(data, target, self.mixup_alpha, get_index=True)
                     cos = F.cosine_similarity(feats, feats[index])
+                elif self.reg_sim_mixup:
+                    with torch.no_grad():
+                        _, feats = self.model(data, get_feats=True)
+                        feats = feats.detach()
+                    mix_data, part_target_a, part_target_b, lam, index = mixup_data(data, target, self.mixup_alpha, get_index=True)
+                    cos = F.cosine_similarity(feats, feats[index])
+                    cos = torch.cat([torch.zeros_like(cos), cos])
+                    target_a = torch.cat([target, part_target_a])
+                    target_b = torch.cat([target, part_target_b])
+                    data = torch.cat([data, mix_data], dim=0)
 
                 self.optimizer.zero_grad()                
                 output = self.model(data)
                 if self.task == "classification":
                     if self.mixup_pred or self.regmixup:
                         current_loss = mixup_criterion(self.criterion, output, target_a, target_b, lam)
-                    elif self.sim_mixup:
+                    elif self.sim_mixup or self.reg_sim_mixup:
                         current_loss = similarity_mixup_criterion(self.criterion, output, target_a, target_b, lam, cos)
                     else:
                         if self.mixup_augm:
@@ -73,7 +83,7 @@ class DefaultLearner(AbstractLearner):
                     len_data += len(data)
 
                 # Update metrics
-                if self.regmixup:
+                if self.regmixup or self.reg_sim_mixup:
                     confidence, pred = F.softmax(output[:target.shape[0]], dim=1).max(dim=1, keepdim=True)
                 else:
                     confidence, pred = F.softmax(output, dim=1).max(dim=1, keepdim=True)
@@ -147,7 +157,7 @@ class DefaultLearner(AbstractLearner):
             self.scheduler.step()
 
     def evaluate(
-        self, dloader, len_dataset, split="test", mode="mcp", samples=50, verbose=False, return_confidences=False
+        self, dloader, len_dataset, split="test", mode="mcp", samples=50, verbose=False, return_confidences=False, temp=1
     ):
         self.model.eval()
         metrics = Metrics(self.metrics, len_dataset, self.num_classes)
@@ -170,7 +180,7 @@ class DefaultLearner(AbstractLearner):
                             loss += self.criterion(output, target)
                         elif self.task == "segmentation":
                             loss += self.criterion(output, target.squeeze(dim=1))
-                        confidence, pred = F.softmax(output, dim=1).max(dim=1, keepdim=True)
+                        confidence, pred = F.softmax(output / temp, dim=1).max(dim=1, keepdim=True)
 
                     elif mode == "tcp":
                         output = self.model(data)
@@ -178,7 +188,7 @@ class DefaultLearner(AbstractLearner):
                             loss += self.criterion(output, target)
                         elif self.task == "segmentation":
                             loss += self.criterion(output, target.squeeze(dim=1))
-                        probs = F.softmax(output, dim=1)
+                        probs = F.softmax(output / temp, dim=1)
                         pred = probs.max(dim=1, keepdim=True)[1]
                         labels_hot = misc.one_hot_embedding(
                             target, self.num_classes
@@ -208,11 +218,11 @@ class DefaultLearner(AbstractLearner):
                             loss += self.criterion(output, target)
                         elif self.task == "segmentation":
                             loss += self.criterion(output, target.squeeze(dim=1))
-                        probs = F.softmax(output, dim=1)
+                        probs = F.softmax(output / temp, dim=1)
                         confidence = (probs * torch.log(probs + 1e-9)).sum(dim=1)  # entropy
                         pred = probs.max(dim=1, keepdim=True)[1]
 
-                    metrics.update(pred, target, confidence, output) # /!\ Move for TCP
+                    metrics.update(pred, target, confidence, output / temp) # /!\ Move for TCP
 
         scores = metrics.get_scores(split=split)
         losses = {"loss_nll": loss}
@@ -221,3 +231,31 @@ class DefaultLearner(AbstractLearner):
             return losses, scores, conf
         else:
             return losses, scores
+        
+    def find_temp(self, split="val"):
+        self.model.eval()
+        if split == "val":
+            dloader = self.val_loader
+            len_dataset = self.prod_val_len
+        elif split == 'test':
+            dloader = self.test_loader
+            len_dataset = self.prod_test_len
+
+        metrics = Metrics(self.metrics, len_dataset, self.num_classes)
+
+        with tqdm(dloader) as loop:
+            for data, targets in loop:
+                data, targets = data.to(self.device), targets.to(self.device)
+
+                with torch.no_grad():
+                    logits = self.model(data)
+
+                    metrics.update(target=targets, logit=logits)
+
+        temp = metrics.get_temp()
+
+        return temp
+
+
+        
+

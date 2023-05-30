@@ -50,7 +50,10 @@ class AbstractLearner:
             LOGGER.info(f"{self.adv_iter} iterations of adv augm with eps = {self.adv_eps}")
         self.sim_mixup = config_args['training'].get("sim_mixup", False)
         if self.sim_mixup:
-            LOGGER.info("Using similarity for mixing labels")
+            LOGGER.info(f"Using similarity for mixing labels with alpha = {self.mixup_alpha}")
+        self.reg_sim_mixup = config_args['training'].get("reg_sim_mixup", False)
+        if self.reg_sim_mixup:
+            LOGGER.info(f"Using similarity for mixing labels in regularization with alpha = {self.mixup_alpha}")
         ####
 
         self.train_loader = train_loader
