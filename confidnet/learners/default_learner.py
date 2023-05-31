@@ -8,7 +8,7 @@ from confidnet.learners.learner import AbstractLearner
 from confidnet.utils import misc
 from confidnet.utils.logger import get_logger
 from confidnet.utils.metrics import Metrics
-from confidnet.utils.losses import mixup_data,mixup_criterion,pgd_linf,similarity_mixup_criterion
+from confidnet.utils.losses import mixup_data,mixup_criterion,pgd_linf,similarity_mixup_criterion, kernel_mixup_data, kernel_mixup_criterion
 
 LOGGER = get_logger(__name__, level="DEBUG")
 
@@ -28,11 +28,18 @@ class DefaultLearner(AbstractLearner):
                 data, target = data.to(self.device), target.to(self.device)
                 if self.mixup_augm:
                     data, target_a, target_b, lam = mixup_data(data,target,self.mixup_alpha, self.intra_class, self.inter_class, self.mixup_norm)
+                elif self.kernel_mixup:
+                    data, target_a, target_b, lam = kernel_mixup_data(data,target,self.mixup_alpha, self.kernel_tau_x)
                 elif self.adv_augm:
                     delta = pgd_linf(self.model, data, target, epsilon=self.adv_eps, num_iter=self.adv_iter, randomize=True)
                     data = data + delta
                 elif self.regmixup_augm:
                     mix_data, part_target_a, part_target_b, lam = mixup_data(data, target, self.mixup_alpha)
+                    target_a = torch.cat([target, part_target_a])
+                    target_b = torch.cat([target, part_target_b])
+                    data = torch.cat([data, mix_data], dim=0)
+                elif self.kernel_regmixup:
+                    mix_data, part_target_a, part_target_b, lam = kernel_mixup_data(data, target, self.mixup_alpha, self.kernel_tau_x)
                     target_a = torch.cat([target, part_target_a])
                     target_b = torch.cat([target, part_target_b])
                     data = torch.cat([data, mix_data], dim=0)
@@ -60,6 +67,8 @@ class DefaultLearner(AbstractLearner):
                         current_loss = mixup_criterion(self.criterion, output, target_a, target_b, lam)
                     elif self.sim_mixup or self.reg_sim_mixup:
                         current_loss = similarity_mixup_criterion(self.criterion, output, target_a, target_b, lam, cos)
+                    elif self.kernel_mixup or self.kernel_regmixup:
+                        current_loss = kernel_mixup_criterion(self.criterion, output, target_a, target_b, lam, self.kernel_tau_y)
                     else:
                         if self.mixup_augm or self.regmixup_augm:
                             if lam > 0.5:
@@ -83,7 +92,7 @@ class DefaultLearner(AbstractLearner):
                     len_data += len(data)
 
                 # Update metrics
-                if self.regmixup_augm or self.reg_sim_mixup:
+                if self.regmixup_augm or self.reg_sim_mixup or self.kernel_regmixup:
                     confidence, pred = F.softmax(output[:target.shape[0]], dim=1).max(dim=1, keepdim=True)
                 else:
                     confidence, pred = F.softmax(output, dim=1).max(dim=1, keepdim=True)

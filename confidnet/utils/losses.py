@@ -254,6 +254,32 @@ def similarity_mixup_criterion(criterion, pred, y_a, y_b, lam, cos):
     criterion.reduction = old_reduction
     return loss
 
+def sigmoid(x, tau=1):
+    s = 1 / (1 + np.exp( -x / tau))
+    return s
+
+def scaling(x):
+    return np.arctanh((2*x-1))
+
+def kernel_mixup_data(x, y, alpha=1.0, tau_x=0.5, get_index=False):
+    batch_size = x.size()[0]
+    lam = np.random.beta(alpha, alpha)
+
+    k_lam = torch.tensor(sigmoid(scaling(lam), tau_x))
+
+    index = torch.randperm(batch_size, device=x.device)
+    mixed_x = k_lam * x + (1-k_lam) * x[index, :]
+    y_a, y_b = y, y[index]
+
+    if not get_index:
+        return mixed_x, y_a, y_b, lam
+    else:
+        return mixed_x, y_a, y_b, lam, index
+
+def kernel_mixup_criterion(criterion, pred, y_a, y_b, lam, tau_y=0.5):
+    k_lam = torch.tensor(sigmoid(scaling(lam), tau_y))
+    return k_lam * criterion(pred, y_a) + (1 - k_lam) * criterion(pred, y_b)
+
 def pgd_linf(model, X, y, epsilon=0.1, alpha=0.01, num_iter=20, randomize=False):
     """Construct an adversarial perturbation for a given batch of images X using ground truth y and a given model with a L_inf-PGD attack.
     Args:
