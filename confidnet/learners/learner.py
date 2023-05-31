@@ -30,9 +30,12 @@ class AbstractLearner:
         self.mixup_alpha = config_args["training"].get("mixup_alpha", 1.0)
         if self.mixup_augm:
             LOGGER.info(f"Using mixup augmentation with alpha = {self.mixup_alpha}")
-        self.regmixup = config_args["training"].get("regmixup", False)
-        if self.regmixup:
-            LOGGER.info(f"Using regmixup with alpha = {self.mixup_alpha}")
+        self.regmixup_augm = config_args["training"].get("regmixup_augm", False)
+        if self.regmixup_augm:
+            LOGGER.info(f"Using regmixup augmentation with alpha = {self.mixup_alpha}")
+        self.regmixup_pred = config_args["training"].get("regmixup_pred", False)
+        if self.regmixup_pred:
+            LOGGER.info(f"Using regmixup predictions")
         self.intra_class = config_args["training"].get("intra_class", False)
         if self.intra_class:
             LOGGER.info(f"Using intra class mixup !")

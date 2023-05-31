@@ -81,7 +81,7 @@ class Metrics:
         if "accuracy" in self.metrics:
             accuracy = self.accuracy / self.len_dataset
             scores[f"{split}/accuracy"] = {"value": accuracy, "string": f"{accuracy:05.2%}"}
-        if "auroc" in self.metrics:
+        if "auroc" in self.metrics or "auc" in self.metrics:
             if len(np.unique(self.accurate)) == 1:
                 auc_score = 1
             else:

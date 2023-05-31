@@ -31,7 +31,7 @@ class DefaultLearner(AbstractLearner):
                 elif self.adv_augm:
                     delta = pgd_linf(self.model, data, target, epsilon=self.adv_eps, num_iter=self.adv_iter, randomize=True)
                     data = data + delta
-                elif self.regmixup:
+                elif self.regmixup_augm:
                     mix_data, part_target_a, part_target_b, lam = mixup_data(data, target, self.mixup_alpha)
                     target_a = torch.cat([target, part_target_a])
                     target_b = torch.cat([target, part_target_b])
@@ -56,12 +56,12 @@ class DefaultLearner(AbstractLearner):
                 self.optimizer.zero_grad()                
                 output = self.model(data)
                 if self.task == "classification":
-                    if self.mixup_pred or self.regmixup:
+                    if self.mixup_pred or self.regmixup_pred:
                         current_loss = mixup_criterion(self.criterion, output, target_a, target_b, lam)
                     elif self.sim_mixup or self.reg_sim_mixup:
                         current_loss = similarity_mixup_criterion(self.criterion, output, target_a, target_b, lam, cos)
                     else:
-                        if self.mixup_augm:
+                        if self.mixup_augm or self.regmixup_augm:
                             if lam > 0.5:
                                 # current_loss = self.criterion(output, target_a) + (1-lam) * self.criterion(output, target_b)
                                 current_loss = self.criterion(output, target_a)
@@ -83,7 +83,7 @@ class DefaultLearner(AbstractLearner):
                     len_data += len(data)
 
                 # Update metrics
-                if self.regmixup or self.reg_sim_mixup:
+                if self.regmixup_augm or self.reg_sim_mixup:
                     confidence, pred = F.softmax(output[:target.shape[0]], dim=1).max(dim=1, keepdim=True)
                 else:
                     confidence, pred = F.softmax(output, dim=1).max(dim=1, keepdim=True)

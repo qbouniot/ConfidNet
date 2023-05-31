@@ -200,7 +200,7 @@ CUSTOM_LOSS = {
     "selfconfid_online": SelfConfidOnlineLoss,
 }
 
-def mixup_data(x, y, alpha=1.0, intra_class=False, inter_class=False, mixup_norm=False, get_index=True):
+def mixup_data(x, y, alpha=1.0, intra_class=False, inter_class=False, mixup_norm=False, get_index=False):
     '''Returns mixed inputs, pairs of targets, and lambda'''
     if alpha > 0:
         lam = np.random.beta(alpha, alpha)
@@ -250,7 +250,7 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
 def similarity_mixup_criterion(criterion, pred, y_a, y_b, lam, cos):
     old_reduction = criterion.reduction
     criterion.reduction = 'none'
-    loss = torch.mean(criterion(pred, y_a) * (1 - (1 - lam) * (cos + 1) / 2) + (1 - lam) * (cos + 1) * criterion(pred, y_b) / 2)
+    loss = torch.mean(criterion(pred, y_a) * (1 - (1 - lam) * (cos + 1) / 2) + criterion(pred, y_b) * (1 - lam) * (cos + 1) / 2)
     criterion.reduction = old_reduction
     return loss
 

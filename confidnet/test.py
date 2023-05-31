@@ -258,7 +258,7 @@ def main():
             if args.get_confidences:
                 conf_val_ts = results_val_ts[2]
 
-        LOGGER.info("Results")
+        LOGGER.info("Results with approximated temperature:")
         print("----------------------------------------------------------------")
         for st in scores_test_val_ts:
             print(st)
@@ -291,7 +291,7 @@ def main():
             if args.get_confidences:
                 conf_temp_ts = results_temp_ts[2]
 
-        LOGGER.info("Results")
+        LOGGER.info("Results with optimal temperature")
         print("----------------------------------------------------------------")
         for st in scores_test_temp_ts:
             print(st)
