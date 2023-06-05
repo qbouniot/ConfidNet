@@ -329,8 +329,10 @@ def main():
 
         if args.val_temp_scaling:
             averaged_results_val_ts = defaultdict(list)
+            all_val_ts = []
         if args.opt_temp_scaling:
             averaged_results_opt_ts = defaultdict(list)
+            all_opt_ts = []
 
         for ckpt_name in list_ckpts:
             ckpt_path = config_args["training"]["output_folder"] / "ckpts" / ckpt_name
@@ -357,6 +359,7 @@ def main():
 
             if args.val_temp_scaling:
                 val_temp = learner.find_temp(split='val')
+                all_val_ts.append(val_temp)
 
                 results_val_ts = learner.evaluate(
                     learner.test_loader,
@@ -375,6 +378,7 @@ def main():
 
             if args.opt_temp_scaling:
                 test_temp = learner.find_temp(split='test')
+                all_opt_ts.append(test_temp)
 
                 results_temp_ts = learner.evaluate(
                     learner.test_loader,
@@ -389,9 +393,9 @@ def main():
 
                 scores_test_temp_ts = results_temp_ts[1]
                 for st in scores_test_temp_ts:
-                    averaged_results_opt_ts[st].append(scores_test_val_ts[st]['value'])
+                    averaged_results_opt_ts[st].append(scores_test_temp_ts[st]['value'])
 
-        LOGGER.info(f"Averaged Results over {args.mean_last} last models")
+        print(f"Averaged Results over {args.mean_last} last models")
         print("----------------------------------------------------------------")
         for st in averaged_results:
             print(st)
@@ -399,7 +403,8 @@ def main():
             print("----------------------------------------------------------------")
 
         if args.val_temp_scaling:
-            LOGGER.info(f"Results with estimated temperature")
+            print(f"Results with estimated temperature")
+            print(f"Temperatures found: {all_val_ts}")
             print("----------------------------------------------------------------")
             for st in averaged_results_val_ts:
                 print(st)
@@ -407,7 +412,8 @@ def main():
                 print("----------------------------------------------------------------")
 
         if args.opt_temp_scaling:
-            LOGGER.info(f"Results with optimal temperature")
+            print(f"Results with optimal temperature")
+            print(f"Temperatures found: {all_opt_ts}")
             print("----------------------------------------------------------------")
             for st in averaged_results_opt_ts:
                 print(st)

@@ -4,6 +4,7 @@ from shutil import copyfile, rmtree
 
 import click
 import torch
+from pathlib import Path
 
 import numpy as np
 import random
@@ -11,7 +12,7 @@ import random
 from confidnet.loaders import get_loader
 from confidnet.learners import get_learner
 from confidnet.utils.logger import get_logger
-from confidnet.utils.misc import load_yaml
+from confidnet.utils.misc import load_yaml, dump_yaml
 # from confidnet.utils.tensorboard_logger import TensorboardLogger
 from torch.utils.tensorboard import SummaryWriter
 
@@ -32,6 +33,17 @@ def main():
         default=False,
         help="Force training from scratch",
     )
+
+    #### args for modifying config file
+    parser.add_argument("--exp_dir", type=str, default=None)
+    parser.add_argument("--kernel_tau_x", type=float, default=None)
+    parser.add_argument("--kernel_tau_y", type=float, default=None)
+    parser.add_argument("--mixup_alpha", type=float, default=None)
+    parser.add_argument('--kernel_mixup', action="store_true", default=None)
+    parser.add_argument("--kernel_regmixup", action="store_true", default=None)
+    parser.add_argument('--kernel_sim_mixup', action="store_true", default=None)
+    ####
+
     parser.add_argument('--seed', default=42, type=int)
     args = parser.parse_args()
 
@@ -46,6 +58,21 @@ def main():
     np.random.seed(seed)
     random.seed(seed)
     LOGGER.info(f"Random seed used: {seed}")
+
+    if args.exp_dir is not None:
+        config_args["training"]["output_folder"] = Path(args.exp_dir)
+    if args.kernel_tau_x is not None:
+        config_args["training"]["kernel_tau_x"] = args.kernel_tau_x
+    if args.kernel_tau_y is not None:
+        config_args["training"]["kernel_tau_y"] = args.kernel_tau_y
+    if args.mixup_alpha is not None:
+        config_args["training"]["mixup_alpha"] = args.mixup_alpha
+    if args.kernel_mixup is not None:
+        config_args["training"]["kernel_mixup"] = args.kernel_mixup
+    if args.kernel_regmixup is not None:
+        config_args["training"]["kernel_regmixup"] = args.kernel_regmixup
+    if args.kernel_sim_mixup is not None:
+        config_args["training"]["kernel_sim_mixup"] = args.kernel_sim_mixup
 
 
     # Start from scatch or resume existing model and optim
@@ -120,9 +147,10 @@ def main():
     )
     # learner.tb_logger = TensorboardLogger(config_args["training"]["output_folder"])
     learner.tb_logger = SummaryWriter(config_args["training"]["output_folder"])
-    copyfile(
-        args.config_path, config_args["training"]["output_folder"] / f"config_{start_epoch}.yaml"
-    )
+    # copyfile(
+    #     args.config_path, config_args["training"]["output_folder"] / f"config_{start_epoch}.yaml"
+    # )
+    dump_yaml(config_args, start_epoch)
     LOGGER.info(
         "Sending batches as {}".format(
             tuple(

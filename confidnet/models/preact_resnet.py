@@ -168,7 +168,7 @@ class PreActResNet(AbstractModel):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    def forward(self, x, lin=0, lout=5):
+    def forward(self, x, lin=0, lout=5, get_feats=False):
         out = x
         if lin < 1 and lout > -1:
             out = self.conv1(out)
@@ -184,9 +184,13 @@ class PreActResNet(AbstractModel):
             out = self.layer4(out)
         if lout > 4:
             out = F.avg_pool2d(out, 4)
-            out = out.view(out.size(0), -1)
-            out = self.linear(out)
-        return out
+            feats = out.view(out.size(0), -1)
+            out = self.linear(feats)
+
+        if not get_feats:
+            return out
+        else:
+            return out, feats
 
 
 def PreActResNet18():

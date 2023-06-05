@@ -22,7 +22,7 @@ class Metrics:
         self.accuracy = 0
         self.current_miou = 0
         self.confusion_matrix = np.zeros((self.n_classes, self.n_classes))
-        self.bins = 100
+        self.bins = 15
         self.logits, self.targets = [], []
 
     def update(self, pred=None, target=None, confidence=None, logit=None):
@@ -53,7 +53,7 @@ class Metrics:
 
         f = lambda t: get_nll(torch.tensor(self.logits / t, dtype=torch.float), self.targets).numpy()
 
-        res = minimize(f, 1, method='nelder-mead', options={'xtol': 1e-3})
+        res = minimize(f, 1, method='nelder-mead', options={'xatol': 1e-3})
 
         # logsoftmax = F.log_softmax(torch.tensor(self.logits, dtype=torch.float), dim=1)
         # out = torch.tensor(self.targets, dtype=torch.float)

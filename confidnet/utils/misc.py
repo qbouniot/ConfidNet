@@ -4,7 +4,7 @@ from pathlib import Path
 
 import torch
 import yaml
-
+import copy
 
 def one_hot_embedding(labels, num_classes):
     """Embedding labels to one-hot form.
@@ -54,3 +54,13 @@ def load_yaml(path):
     if config_args["model"]["resume"] not in [None, "vgg16"]:
         config_args["model"]["resume"] = Path(config_args["model"]["resume"])
     return config_args
+
+def dump_yaml(config, start_epoch):
+    dummy_config = copy.deepcopy(config)
+    dummy_config["data"]["data_dir"] = str(dummy_config["data"]["data_dir"])
+    dummy_config["training"]["output_folder"] = str(dummy_config["training"]["output_folder"])
+    if dummy_config["model"]["resume"] not in [None, "vgg16"]:
+        dummy_config["model"]["resume"] = str(dummy_config["model"]["resume"])
+    
+    with open(config["training"]["output_folder"] / f"config_{start_epoch}.yaml", "w") as f:
+        yaml.dump(dummy_config, f)

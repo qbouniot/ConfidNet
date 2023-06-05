@@ -3,12 +3,13 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+import math
 
 from confidnet.learners.learner import AbstractLearner
 from confidnet.utils import misc
 from confidnet.utils.logger import get_logger
 from confidnet.utils.metrics import Metrics
-from confidnet.utils.losses import mixup_data,mixup_criterion,pgd_linf,similarity_mixup_criterion, kernel_mixup_data, kernel_mixup_criterion
+from confidnet.utils.losses import mixup_data,mixup_criterion,pgd_linf,similarity_mixup_criterion, kernel_mixup_data, kernel_mixup_criterion, kernel_sim_mixup_data, kernel_sim_mixup_criterion
 
 LOGGER = get_logger(__name__, level="DEBUG")
 
@@ -22,6 +23,10 @@ class DefaultLearner(AbstractLearner):
         )
         loss, len_steps, len_data = 0, 0, 0
 
+        if self.kernel_mixup or self.kernel_regmixup or self.kernel_sim_mixup:
+            kernel_tau_x, kernel_tau_y = self.update_taus(epoch)
+
+
         # Training loop
         with tqdm(self.train_loader) as loop:
             for batch_id, (data, target) in enumerate(loop):
@@ -29,7 +34,7 @@ class DefaultLearner(AbstractLearner):
                 if self.mixup_augm:
                     data, target_a, target_b, lam = mixup_data(data,target,self.mixup_alpha, self.intra_class, self.inter_class, self.mixup_norm)
                 elif self.kernel_mixup:
-                    data, target_a, target_b, lam = kernel_mixup_data(data,target,self.mixup_alpha, self.kernel_tau_x)
+                    data, target_a, target_b, lam = kernel_mixup_data(data,target,self.mixup_alpha, kernel_tau_x)
                 elif self.adv_augm:
                     delta = pgd_linf(self.model, data, target, epsilon=self.adv_eps, num_iter=self.adv_iter, randomize=True)
                     data = data + delta
@@ -39,10 +44,18 @@ class DefaultLearner(AbstractLearner):
                     target_b = torch.cat([target, part_target_b])
                     data = torch.cat([data, mix_data], dim=0)
                 elif self.kernel_regmixup:
-                    mix_data, part_target_a, part_target_b, lam = kernel_mixup_data(data, target, self.mixup_alpha, self.kernel_tau_x)
+                    mix_data, part_target_a, part_target_b, lam = kernel_mixup_data(data, target, self.mixup_alpha, kernel_tau_x)
                     target_a = torch.cat([target, part_target_a])
                     target_b = torch.cat([target, part_target_b])
                     data = torch.cat([data, mix_data], dim=0)
+                elif self.kernel_sim_mixup:
+                    with torch.no_grad():
+                        _, feats = self.model(data, get_feats=True)
+                        feats = feats.detach()
+                    data, target_a, target_b, lam, dist = kernel_sim_mixup_data(data, target, feats, self.mixup_alpha, kernel_tau_x, get_index=False)
+                    kernel_tau_x = kernel_tau_x / dist # for logging purposes, already done above
+                    kernel_tau_y = kernel_tau_y / dist
+                    
                 elif self.sim_mixup:
                     with torch.no_grad():
                         _, feats = self.model(data, get_feats=True)
@@ -68,7 +81,9 @@ class DefaultLearner(AbstractLearner):
                     elif self.sim_mixup or self.reg_sim_mixup:
                         current_loss = similarity_mixup_criterion(self.criterion, output, target_a, target_b, lam, cos)
                     elif self.kernel_mixup or self.kernel_regmixup:
-                        current_loss = kernel_mixup_criterion(self.criterion, output, target_a, target_b, lam, self.kernel_tau_y)
+                        current_loss = kernel_mixup_criterion(self.criterion, output, target_a, target_b, lam, kernel_tau_y)
+                    elif self.kernel_sim_mixup:
+                        current_loss = kernel_sim_mixup_criterion(self.criterion, output, target_a, target_b, lam, kernel_tau_y)
                     else:
                         if self.mixup_augm or self.regmixup_augm:
                             if lam > 0.5:
@@ -108,6 +123,15 @@ class DefaultLearner(AbstractLearner):
                         }
                     )
                 )
+                if self.kernel_sim_mixup:
+                    loop.set_postfix(
+                    OrderedDict(
+                        {
+                            "kernel_tau_x": f"{np.median(kernel_tau_x):05.1e}",
+                            "kernel_tau_y": f"{np.median(kernel_tau_y):05.1e}",
+                        }
+                    )
+                    )
                 loop.update()
 
         # Eval on epoch end
@@ -125,6 +149,12 @@ class DefaultLearner(AbstractLearner):
                 },
             }
         )
+        if self.kernel_mixup or self.kernel_regmixup:
+            logs_dict["kernel_tau_x"] = {'value': kernel_tau_x, "string": f"{kernel_tau_x:05.1e}"}
+            logs_dict["kernel_tau_y"] = {'value': kernel_tau_y, "string": f"{kernel_tau_y:05.1e}"}
+        elif self.kernel_sim_mixup:
+            logs_dict["kernel_tau_x"] = {'value': np.median(kernel_tau_x), "string": f"{np.median(kernel_tau_x):05.1e}"}
+            logs_dict["kernel_tau_y"] = {'value': np.median(kernel_tau_y), "string": f"{np.median(kernel_tau_y):05.1e}"}
         for s in scores:
             logs_dict[s] = scores[s]
 
@@ -264,6 +294,27 @@ class DefaultLearner(AbstractLearner):
         temp = metrics.get_temp()
 
         return temp
+    
+    def update_taus(self, epoch):
+        if self.kernel_tau_x_sched == 'constant':
+            kernel_tau_x = self.kernel_tau_x
+        elif self.kernel_tau_x_sched == 'cosine':
+            kernel_tau_x = self.target_kernel_tau_x - (self.target_kernel_tau_x - self.kernel_tau_x) * (np.cos(np.pi * (epoch) / (self.nb_epochs)) + 1) / 2
+        elif self.kernel_tau_x_sched == 'linear':
+            kernel_tau_x = self.kernel_tau_x + (self.target_kernel_tau_x - self.kernel_tau_x)/(self.nb_epochs)*epoch
+        else:
+            raise NotImplementedError(f"{self.kernel_tau_x_sched} is not supported")
+        
+        if self.kernel_tau_y_sched == 'constant':
+            kernel_tau_y = self.kernel_tau_y
+        elif self.kernel_tau_y_sched == 'cosine':
+            kernel_tau_y = self.target_kernel_tau_y - (self.target_kernel_tau_y - self.kernel_tau_y) * (np.cos(np.pi * (epoch) / (self.nb_epochs)) + 1) / 2
+        elif self.kernel_tau_y_sched == 'linear':
+            kernel_tau_y = self.kernel_tau_y + (self.target_kernel_tau_y - self.kernel_tau_y)/(self.nb_epochs)*epoch
+        else:
+            raise NotImplementedError(f"{self.kernel_tau_y_sched} is not supported")
+        
+        return kernel_tau_x, kernel_tau_y
 
 
         

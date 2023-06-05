@@ -61,10 +61,25 @@ class AbstractLearner:
         self.kernel_tau_y = config_args["training"].get("kernel_tau_y", 0.5)
         self.kernel_mixup = config_args["training"].get("kernel_mixup", False)
         if self.kernel_mixup:
-            LOGGER.info(f"Using mixup augmentation with alpha = {self.mixup_alpha} and tau_x = {self.kernel_tau_x}")
+            LOGGER.info(f"Using kernel mixup with alpha = {self.mixup_alpha}, tau_x = {self.kernel_tau_x} and tau_y = {self.kernel_tau_y}")
+        self.kernel_sim_mixup = config_args["training"].get("kernel_sim_mixup", False)
+        if self.kernel_sim_mixup:
+            LOGGER.info(f"Using kernel sim mixup with alpha = {self.mixup_alpha}, tau_x = {self.kernel_tau_x} and tau_y = {self.kernel_tau_y}")
         self.kernel_regmixup = config_args["training"].get("kernel_regmixup", False)
         if self.kernel_regmixup:
             LOGGER.info(f"Using kernel regmixup with alpha = {self.mixup_alpha}, tau_x = {self.kernel_tau_x} and tau_y = {self.kernel_tau_y}")
+        self.kernel_tau_x_sched = config_args["training"].get("kernel_tau_x_sched", "constant")
+        if self.kernel_mixup:
+            LOGGER.info(f"Using a {self.kernel_tau_x_sched} scheduler for tau_x")
+        self.kernel_tau_y_sched = config_args["training"].get("kernel_tau_y_sched", "constant")
+        if self.kernel_mixup:
+            LOGGER.info(f"Using a {self.kernel_tau_y_sched} scheduler for tau_y")
+        self.target_kernel_tau_x = config_args["training"].get("target_kernel_tau_x", 0)
+        if self.kernel_mixup and self.kernel_tau_x_sched != 'constant':
+            LOGGER.info(f"Target tau_x in the scheduler is {self.target_kernel_tau_x}")
+        self.target_kernel_tau_y = config_args["training"].get("target_kernel_tau_y", 0)
+        if self.kernel_mixup and self.kernel_tau_y_sched != 'constant':
+            LOGGER.info(f"Target tau_y in the scheduler is {self.target_kernel_tau_y}")
         ####
 
         self.train_loader = train_loader
