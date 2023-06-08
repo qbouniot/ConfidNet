@@ -16,7 +16,7 @@ LOGGER = get_logger(__name__, level="DEBUG")
 
 class DefaultLearner(AbstractLearner):
 
-    def train(self, epoch, eval=True):
+    def train(self, epoch, eval=True, verbose=True):
         self.model.train()
         metrics = Metrics(
             self.metrics, self.prod_train_len, self.num_classes
@@ -28,7 +28,7 @@ class DefaultLearner(AbstractLearner):
 
 
         # Training loop
-        with tqdm(self.train_loader) as loop:
+        with tqdm(self.train_loader, desc=f"Epoch {epoch}/{self.nb_epochs}", disable=not verbose) as loop:
             for batch_id, (data, target) in enumerate(loop):
                 data, target = data.to(self.device), target.to(self.device)
                 if self.mixup_augm:
@@ -284,7 +284,7 @@ class DefaultLearner(AbstractLearner):
         else:
             return losses, scores
         
-    def find_temp(self, split="val"):
+    def find_temp(self, split="val", verbose=False):
         self.model.eval()
         if split == "val":
             dloader = self.val_loader
@@ -295,7 +295,7 @@ class DefaultLearner(AbstractLearner):
 
         metrics = Metrics(self.metrics, len_dataset, self.num_classes)
 
-        with tqdm(dloader) as loop:
+        with tqdm(dloader, disable=not verbose) as loop:
             for data, targets in loop:
                 data, targets = data.to(self.device), targets.to(self.device)
 
@@ -328,7 +328,19 @@ class DefaultLearner(AbstractLearner):
             raise NotImplementedError(f"{self.kernel_tau_y_sched} is not supported")
         
         return kernel_tau_x, kernel_tau_y
-
-
+    
+    def optim_taus(self, tau_x, tau_y, scores_weights={"accuracy":1.,"ece":1.,"nll":1.}):
+        self.kernel_tau_x = tau_x
+        self.kernel_tau_y = tau_y
         
+        for epoch in range(self.nb_epochs):
+            self.train(epoch, eval=False, verbose=False)
 
+        opt_temp = self.find_temp(split="val", verbose=False)
+        _, scores_val = self.evaluate(self.val_loader, self.prod_val_len, split="val", temp=opt_temp, verbose=False)
+
+        total_score = 0.
+        for score in scores_weights.keys():
+            total_score += scores_val[f"val/{score}"] * scores_weights[score]
+
+        return total_score
