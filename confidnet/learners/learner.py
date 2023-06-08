@@ -63,8 +63,16 @@ class AbstractLearner:
         if self.kernel_mixup:
             LOGGER.info(f"Using kernel mixup with alpha = {self.mixup_alpha}, tau_x = {self.kernel_tau_x} and tau_y = {self.kernel_tau_y}")
         self.kernel_sim_mixup = config_args["training"].get("kernel_sim_mixup", False)
-        if self.kernel_sim_mixup:
-            LOGGER.info(f"Using kernel sim mixup with alpha = {self.mixup_alpha}, tau_x = {self.kernel_tau_x} and tau_y = {self.kernel_tau_y}")
+        self.kernel_sim_inputs = config_args["training"].get("kernel_sim_inputs", False)
+        if self.kernel_sim_mixup and not self.kernel_sim_inputs:
+            LOGGER.info(f"Using kernel sim mixup on features with alpha = {self.mixup_alpha}, tau_x = {self.kernel_tau_x} and tau_y = {self.kernel_tau_y}")
+        elif self.kernel_sim_mixup and self.kernel_sim_inputs:
+            LOGGER.info(f"Using kernel sim mixup on inputs with alpha = {self.mixup_alpha}, tau_x = {self.kernel_tau_x} and tau_y = {self.kernel_tau_y}")
+        self.kernel_sim_regmixup = config_args["training"].get("kernel_sim_regmixup", False)
+        if self.kernel_sim_regmixup and not self.kernel_sim_inputs:
+            LOGGER.info(f"Using kernel sim regmixup on features with alpha = {self.mixup_alpha}, tau_x = {self.kernel_tau_x} and tau_y = {self.kernel_tau_y}")
+        if self.kernel_sim_regmixup and self.kernel_sim_inputs:
+            LOGGER.info(f"Using kernel sim regmixup on inputs with alpha = {self.mixup_alpha}, tau_x = {self.kernel_tau_x} and tau_y = {self.kernel_tau_y}")
         self.kernel_regmixup = config_args["training"].get("kernel_regmixup", False)
         if self.kernel_regmixup:
             LOGGER.info(f"Using kernel regmixup with alpha = {self.mixup_alpha}, tau_x = {self.kernel_tau_x} and tau_y = {self.kernel_tau_y}")

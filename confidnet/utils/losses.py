@@ -276,13 +276,18 @@ def kernel_mixup_data(x, y, alpha=1.0, tau_x=0.5, get_index=False):
     else:
         return mixed_x, y_a, y_b, lam, index
     
-def kernel_sim_mixup_data(x, y, feats, alpha=1.0, tau_x=0.5, get_index=False):
+def kernel_sim_mixup_data(x, y, feats, alpha=1.0, tau_x=0.5, get_index=False, dist_on_inputs=False):
     batch_size = x.size()[0]
     index = torch.randperm(batch_size, device=x.device)
     lam = np.random.beta(alpha, alpha, batch_size)
-    dist = (feats - feats[index]).pow(2).sum(-1).cpu().numpy()
+    # eps = 1e-12
+    if dist_on_inputs:
+        input_dist = (x - x[index]).pow(2).sum((1,2,3)).detach().cpu().numpy()
+        dist = input_dist / input_dist.mean()
+    else:
+        feat_dist = (feats - feats[index]).pow(2).sum(-1).cpu().numpy()
+        dist = feat_dist / feat_dist.mean()
     k_lam = torch.tensor(sigmoid(scaling(lam), tau_x / dist), device=x.device).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).float()
-
     mixed_x = k_lam * x + (1-k_lam) * x[index, :]
     y_a, y_b = y, y[index]
 

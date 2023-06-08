@@ -39,9 +39,11 @@ def main():
     parser.add_argument("--kernel_tau_x", type=float, default=None)
     parser.add_argument("--kernel_tau_y", type=float, default=None)
     parser.add_argument("--mixup_alpha", type=float, default=None)
-    parser.add_argument('--kernel_mixup', action="store_true", default=None)
-    parser.add_argument("--kernel_regmixup", action="store_true", default=None)
-    parser.add_argument('--kernel_sim_mixup', action="store_true", default=None)
+    parser.add_argument('--kernel_mixup', action="store_true", default=False)
+    parser.add_argument("--kernel_regmixup", action="store_true", default=False)
+    parser.add_argument('--kernel_sim_mixup', action="store_true", default=False)
+    parser.add_argument('--kernel_sim_regmixup', action="store_true", default=False)
+    parser.add_argument('--kernel_sim_inputs', action="store_true", default=False)
     ####
 
     parser.add_argument('--seed', default=42, type=int)
@@ -73,6 +75,8 @@ def main():
         config_args["training"]["kernel_regmixup"] = args.kernel_regmixup
     if args.kernel_sim_mixup is not None:
         config_args["training"]["kernel_sim_mixup"] = args.kernel_sim_mixup
+    config_args["training"]["kernel_sim_regmixup"] = args.kernel_sim_regmixup
+    config_args['training']["kernel_sim_inputs"] = args.kernel_sim_inputs
 
 
     # Start from scatch or resume existing model and optim

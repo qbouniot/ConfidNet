@@ -49,13 +49,32 @@ class DefaultLearner(AbstractLearner):
                     target_b = torch.cat([target, part_target_b])
                     data = torch.cat([data, mix_data], dim=0)
                 elif self.kernel_sim_mixup:
-                    with torch.no_grad():
-                        _, feats = self.model(data, get_feats=True)
-                        feats = feats.detach()
-                    data, target_a, target_b, lam, dist = kernel_sim_mixup_data(data, target, feats, self.mixup_alpha, kernel_tau_x, get_index=False)
-                    kernel_tau_x = kernel_tau_x / dist # for logging purposes, already done above
-                    kernel_tau_y = kernel_tau_y / dist
-                    
+                    if not self.kernel_sim_inputs:
+                        with torch.no_grad():
+                            _, feats = self.model(data, get_feats=True)
+                            feats = feats.detach()
+                    else: 
+                        feats = None
+                    data, target_a, target_b, lam, dist = kernel_sim_mixup_data(data, target, feats, self.mixup_alpha, self.kernel_tau_x, get_index=False, dist_on_inputs=self.kernel_sim_inputs)
+                    # kernel_tau_x = np.clip(kernel_tau_x / dist, 0, 1) # for logging purposes, already done above
+                    # kernel_tau_y = np.clip(kernel_tau_y / dist, 0, 1)
+                    kernel_tau_x = self.kernel_tau_x / dist # for logging purposes, already done above
+                    kernel_tau_y = self.kernel_tau_y / dist
+                elif self.kernel_sim_regmixup:
+                    if not self.kernel_sim_inputs:
+                        with torch.no_grad(): # TODO: can we avoid two pass in the model ?
+                            _, feats = self.model(data, get_feats=True)
+                            feats = feats.detach()
+                    else:
+                        feats = None
+                    mix_data, part_target_a, part_target_b, part_lam, part_dist = kernel_sim_mixup_data(data, target, feats, self.mixup_alpha, self.kernel_tau_x, get_index=False, dist_on_inputs=self.kernel_sim_inputs)
+                    target_a = torch.cat([target, part_target_a])
+                    target_b = torch.cat([target, part_target_b])
+                    data = torch.cat([data, mix_data], dim=0)
+                    lam = np.concatenate([np.zeros_like(part_lam), part_lam], axis=0)
+                    dist = np.concatenate([np.ones_like(part_dist), part_dist], axis=0)
+                    kernel_tau_x = self.kernel_tau_x / dist # for logging purposes, already done above
+                    kernel_tau_y = self.kernel_tau_y / dist
                 elif self.sim_mixup:
                     with torch.no_grad():
                         _, feats = self.model(data, get_feats=True)
@@ -82,7 +101,7 @@ class DefaultLearner(AbstractLearner):
                         current_loss = similarity_mixup_criterion(self.criterion, output, target_a, target_b, lam, cos)
                     elif self.kernel_mixup or self.kernel_regmixup:
                         current_loss = kernel_mixup_criterion(self.criterion, output, target_a, target_b, lam, kernel_tau_y)
-                    elif self.kernel_sim_mixup:
+                    elif self.kernel_sim_mixup or self.kernel_sim_regmixup:
                         current_loss = kernel_sim_mixup_criterion(self.criterion, output, target_a, target_b, lam, kernel_tau_y)
                     else:
                         if self.mixup_augm or self.regmixup_augm:
@@ -107,31 +126,25 @@ class DefaultLearner(AbstractLearner):
                     len_data += len(data)
 
                 # Update metrics
-                if self.regmixup_augm or self.reg_sim_mixup or self.kernel_regmixup:
+                if self.regmixup_augm or self.reg_sim_mixup or self.kernel_regmixup or self.kernel_sim_regmixup:
                     confidence, pred = F.softmax(output[:target.shape[0]], dim=1).max(dim=1, keepdim=True)
                 else:
                     confidence, pred = F.softmax(output, dim=1).max(dim=1, keepdim=True)
                 metrics.update(pred, target, confidence)
 
                 # Update the average loss
-                loop.set_description(f"Epoch {epoch}/{self.nb_epochs}")
-                loop.set_postfix(
-                    OrderedDict(
+                loop.set_description(f"Epoch {epoch}/{self.nb_epochs}", refresh=False)
+                postfix = OrderedDict(
                         {
                             "loss_nll": f"{(loss / len_data):05.4e}",
                             "acc": f"{(metrics.accuracy / len_steps):05.2%}",
                         }
                     )
-                )
                 if self.kernel_sim_mixup:
-                    loop.set_postfix(
-                    OrderedDict(
-                        {
-                            "kernel_tau_x": f"{np.median(kernel_tau_x):05.1e}",
-                            "kernel_tau_y": f"{np.median(kernel_tau_y):05.1e}",
-                        }
-                    )
-                    )
+                    postfix["kernel_tau_x"] = f"{np.median(kernel_tau_x):05.1e}"
+                    postfix["kernel_tau_y"] = f"{np.median(kernel_tau_y):05.1e}"
+                    postfix["dist"] = f"{np.mean(dist):05.1e}"
+                loop.set_postfix(postfix, refresh=False)
                 loop.update()
 
         # Eval on epoch end
